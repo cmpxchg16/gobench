@@ -53,7 +53,7 @@ The funny part - I do some benchmark to the client tester tool and not to the se
 * requests hits and requests rate are 3X better on the same time (10 seconds) and the same number of clients (500)!
 * I try the same with 2000 clients on Siege with proper system configuration, and Siege was crashed
 * I try gobench with the maximum number of clients that we can use (65535 ports) - it's rocked!
-* I didn't put yet the results of ab because I still nedd to investigate the results
+* I didn't put yet the results of ab because I still need to investigate the results
 
 
 Usage
