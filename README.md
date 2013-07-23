@@ -38,17 +38,17 @@ The funny part - I do some benchmark to the client tester tool and not to the se
     Shortest transaction:	        0.00
     
 ###gobench:
-
-    $>go run gobench.go -u http://localhost:80 -c 500 -t 10
-
+    $>go run gobench.go -k=true -u http://localhost:80 -c 500 -t 10
     Dispatching 500 clients
     Waiting for results...
 
-    Requests:                249333 hits
-    Successful requests:     249333 hits
+    Requests:                261017 hits
+    Successful requests:     261017 hits
     Network failed:               0 hits
     Bad failed:                   0 hits
-    Requests rate:            24715 hits/sec
+    Requests rate:            26101 hits/sec
+    Test time:                   10 sec
+
 
 * requests hits and requests rate are 3X better on the same time (10 seconds) and the same number of clients (500)!
 * I try the same with 2000 clients on Siege with proper system configuration, and Siege was crashed
