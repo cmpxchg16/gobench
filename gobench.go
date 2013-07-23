@@ -48,7 +48,6 @@ type Result struct {
 	success       int64
 	networkFailed int64
 	badFailed     int64
-	rps           int64
 }
 
 func init() {
@@ -63,12 +62,11 @@ func init() {
 	flag.IntVar(&readWriteTimeout, "trw", 5000, "Read/Write timeout (in milliseconds)")
 }
 
-func printResults(c chan *Result) {
+func printResults(c chan *Result, startTime time.Time) {
 	var requests int64
 	var success int64
 	var networkFailed int64
 	var badFailed int64
-	var rps int64
 
 	for i := 0; i < clients; i++ {
 		result := <-c
@@ -76,15 +74,21 @@ func printResults(c chan *Result) {
 		success += result.success
 		networkFailed += result.networkFailed
 		badFailed += result.badFailed
-		rps += result.rps
 	}
 
+	elapsed := int64(time.Since(startTime).Seconds())
+	
+	if elapsed == 0 {
+		elapsed = 1
+	}
+	
 	fmt.Println()
 	fmt.Printf("Requests:            %10d hits\n", requests)
 	fmt.Printf("Successful requests: %10d hits\n", success)
 	fmt.Printf("Network failed:      %10d hits\n", networkFailed)
 	fmt.Printf("Bad failed:          %10d hits\n", badFailed)
-	fmt.Printf("Requests rate:       %10d hits/sec\n", rps)
+	fmt.Printf("Requests rate:       %10d hits/sec\n", success / elapsed)
+	fmt.Printf("Test time:           %10d sec\n", elapsed)
 }
 
 func readLines(path string) (lines []string, err error) {
@@ -226,13 +230,14 @@ func client(configuration *Configuration, c chan *Result) {
 
 	result := &Result{requests: 0, success: 0, networkFailed: 0, badFailed: 0}
 
-	startTime := time.Now()
 	for result.requests < configuration.requests && !interrupted() {
 		for _, tmpUrl := range configuration.urls {
 			req, _ := http.NewRequest(configuration.method, tmpUrl, bytes.NewReader(configuration.postData))
 
 			if configuration.keepAlive == true {
 				req.Header.Add("Connection", "keep-alive")
+			} else {
+				req.Header.Add("Connection", "close")
 			}
 
 			resp, err := configuration.client.Do(req)
@@ -258,23 +263,15 @@ func client(configuration *Configuration, c chan *Result) {
 
 			resp.Body.Close()
 		}
-	}
+	}	
 
-	elapsed := int64(time.Since(startTime).Seconds())
-
-	if elapsed == 0 {
-		elapsed = 1
-	}
-
-	result.rps = result.success / elapsed
 	c <- result
 }
 
 func main() {
 
 	signalChannel := make(chan os.Signal, 2)
-	signal.Notify(signalChannel, os.Interrupt)
-	signal.Notify(signalChannel, syscall.SIGTERM)
+	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		_ = <-signalChannel
 		interrupt()
@@ -289,11 +286,13 @@ func main() {
 	resultChannel := make(chan *Result)
 
 	fmt.Printf("Dispatching %d clients\n", clients)
+	
+	startTime := time.Now()
 	for i := 0; i < clients; i++ {
 
 		go client(configuration, resultChannel)
 
 	}
 	fmt.Println("Waiting for results...")
-	printResults(resultChannel)
+	printResults(resultChannel, startTime)
 }
