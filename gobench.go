@@ -77,17 +77,17 @@ func printResults(c chan *Result, startTime time.Time) {
 	}
 
 	elapsed := int64(time.Since(startTime).Seconds())
-	
+
 	if elapsed == 0 {
 		elapsed = 1
 	}
-	
+
 	fmt.Println()
 	fmt.Printf("Requests:            %10d hits\n", requests)
 	fmt.Printf("Successful requests: %10d hits\n", success)
 	fmt.Printf("Network failed:      %10d hits\n", networkFailed)
 	fmt.Printf("Bad failed:          %10d hits\n", badFailed)
-	fmt.Printf("Requests rate:       %10d hits/sec\n", success / elapsed)
+	fmt.Printf("Requests rate:       %10d hits/sec\n", requests/elapsed)
 	fmt.Printf("Test time:           %10d sec\n", elapsed)
 }
 
@@ -159,15 +159,13 @@ func NewConfiguration() *Configuration {
 
 		timeout := make(chan bool, 1)
 		go func() {
-			time.Sleep(time.Duration(period) * time.Second)
+			<-time.After(time.Duration(period) * time.Second)
 			timeout <- true
 		}()
 
 		go func() {
-			select {
-			case <-timeout:
-				interrupt()
-			}
+			<-timeout
+			interrupt()
 		}()
 	}
 
@@ -263,7 +261,7 @@ func client(configuration *Configuration, c chan *Result) {
 
 			resp.Body.Close()
 		}
-	}	
+	}
 
 	c <- result
 }
@@ -281,12 +279,16 @@ func main() {
 
 	configuration := NewConfiguration()
 
-	runtime.GOMAXPROCS(runtime.NumCPU())
+	goMaxProcs := os.Getenv("GOMAXPROCS")
+
+	if goMaxProcs == "" {
+		runtime.GOMAXPROCS(runtime.NumCPU())
+	}
 
 	resultChannel := make(chan *Result)
 
 	fmt.Printf("Dispatching %d clients\n", clients)
-	
+
 	startTime := time.Now()
 	for i := 0; i < clients; i++ {
 
