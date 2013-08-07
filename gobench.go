@@ -232,11 +232,11 @@ func MyClient(connectTimeout, readTimeout, writeTimeout time.Duration) *http.Cli
 
 func client(configuration *Configuration, c chan *Result) {
 
-	myclient := MyClient(time.Duration(connectTimeout)*time.Millisecond, 
-						 time.Duration(readTimeout)*time.Millisecond,
-						 time.Duration(writeTimeout)*time.Millisecond)
-	
-	result := &Result{requests: 0, success: 0, networkConnectFailed: 0, networkRWFailed:0, badFailed: 0}
+	myclient := MyClient(time.Duration(connectTimeout)*time.Millisecond,
+		time.Duration(readTimeout)*time.Millisecond,
+		time.Duration(writeTimeout)*time.Millisecond)
+
+	result := &Result{requests: 0, success: 0, networkConnectFailed: 0, networkRWFailed: 0, badFailed: 0}
 
 	for result.requests < configuration.requests && !interrupted() {
 		for _, tmpUrl := range configuration.urls {
