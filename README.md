@@ -65,19 +65,27 @@ Usage
 
 1. run some http server on port 80
 2. run gobench for HTTP GET
-    go run gobench.go -u http://localhost:80 -k=true -c 500 -t 10
+
+    ```$>go run gobench.go -u http://localhost:80 -k=true -c 500 -t 10```
+    
 3. run gobench for HTTP POST
-    go run gobench.go -u http://localhost:80 -k=true -c 500 -t 10 -d /tmp/post
+
+    ```$>go run gobench.go -u http://localhost:80 -k=true -c 500 -t 10 -d /tmp/post```
 
 
-* NOTE: if you want to build a binary: 
+Notes
+================
 
-    go build gobench.go
+1. build a binary: 
+
+    ```$>go build gobench.go```
+    
+2. Because it's a test tool, in HTTPS the ceritificate verification is insecure
 
 Help
 ================
 
-go run gobench.go --help
+```go run gobench.go --help```
 
 License
 ================
