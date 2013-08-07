@@ -14,7 +14,7 @@ If you already familiar with the model of Go for high performance I/O and gorout
 
 The funny part - I do some benchmark to the client tester tool and not to the server:
 
-##Siege vs gobench:
+##Siege vs GoBench:
 
 ###Siege:
 
@@ -24,56 +24,65 @@ The funny part - I do some benchmark to the client tester tool and not to the se
     ** Preparing 500 concurrent users for battle.
     The server is now under siege...
     Lifting the server siege...      done.
-    Transactions:		       72342 hits
+    Transactions:		       74247 hits
     Availability:		      100.00 %
-    Elapsed time:		        9.29 secs
-    Data transferred:	       88.24 MB
+    Elapsed time:		        9.62 secs
+    Data transferred:	       96.58 MB
     Response time:		        0.06 secs
-    Transaction rate:	     7787.08 trans/sec
-    Throughput:		        9.50 MB/sec
-    Concurrency:		      490.07
-    Successful transactions:           0
+    Transaction rate:	     7717.98 trans/sec
+    Throughput:		       10.04 MB/sec
+    Concurrency:		      490.19
+    Successful transactions:       74247
     Failed transactions:	           0
-    Longest transaction:	        0.84
+    Longest transaction:	        1.02
     Shortest transaction:	        0.00
     
-###gobench:
+###GoBench:
+
     $>go run gobench.go -k=true -u http://localhost:80 -c 500 -t 10
     Dispatching 500 clients
     Waiting for results...
 
-    Requests:                261017 hits
-    Successful requests:     261017 hits
-    Network failed:               0 hits
-    Bad failed:                   0 hits
-    Requests rate:            26101 hits/sec
-    Test time:                   10 sec
+    Dispatching 500 clients
+    Waiting for results...
+
+    Requests:                           390962 hits
+    Successful requests:                390462 hits
+    Network connect failed:                500 hits
+    Network read/write failed:               0 hits
+    Bad requests failed (!2xx):              0 hits
+    Requests rate:                       39096 hits/sec
+    Test time:                              10 sec
 
 
-* requests hits and requests rate are 3X better on the same time (10 seconds) and the same number of clients (500)!
+* requests hits and requests rate are 5X better on the same time (10 seconds) and the same number of clients (500)!
 * I try the same with 2000 clients on Siege with proper system configuration, and Siege was crashed
 * I try gobench with the maximum number of clients that we can use (65535 ports) - it's rocked!
 * I didn't put yet the results of ab because I still need to investigate the results
-
 
 Usage
 ================
 
 1. run some http server on port 80
-2. go run gobench.go -u http://localhost:80 -k=true -c 500 -t 10
+2. run gobench for HTTP GET
+    go run gobench.go -u http://localhost:80 -k=true -c 500 -t 10
+3. run gobench for HTTP POST
+    go run gobench.go -u http://localhost:80 -k=true -c 500 -t 10 -d /tmp/post
 
+
+* NOTE: if you want to build a binary: 
+
+    go build gobench.go
 
 Help
 ================
 
 go run gobench.go --help
 
-
 License
 ================
 
 Licensed under the New BSD License.
-
 
 Author
 ================

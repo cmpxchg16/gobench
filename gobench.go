@@ -30,11 +30,11 @@ var (
 	keepAlive        bool
 	postDataFilePath string
 	connectTimeout   int
-	readWriteTimeout int
+	writeTimeout     int
+	readTimeout      int
 )
 
 type Configuration struct {
-	client    *http.Client
 	urls      []string
 	method    string
 	postData  []byte
@@ -44,10 +44,11 @@ type Configuration struct {
 }
 
 type Result struct {
-	requests      int64
-	success       int64
-	networkFailed int64
-	badFailed     int64
+	requests             int64
+	success              int64
+	networkConnectFailed int64
+	networkRWFailed      int64
+	badFailed            int64
 }
 
 func init() {
@@ -59,20 +60,23 @@ func init() {
 	flag.StringVar(&postDataFilePath, "d", "", "HTTP POST data file path")
 	flag.Int64Var(&period, "t", -1, "Period of time (in seconds)")
 	flag.IntVar(&connectTimeout, "tc", 5000, "Connect timeout (in milliseconds)")
-	flag.IntVar(&readWriteTimeout, "trw", 5000, "Read/Write timeout (in milliseconds)")
+	flag.IntVar(&writeTimeout, "tw", 5000, "Write timeout (in milliseconds)")
+	flag.IntVar(&readTimeout, "tr", 5000, "Read timeout (in milliseconds)")
 }
 
 func printResults(c chan *Result, startTime time.Time) {
 	var requests int64
 	var success int64
-	var networkFailed int64
+	var networkConnectFailed int64
+	var networkRWFailed int64
 	var badFailed int64
 
 	for i := 0; i < clients; i++ {
 		result := <-c
 		requests += result.requests
 		success += result.success
-		networkFailed += result.networkFailed
+		networkConnectFailed += result.networkConnectFailed
+		networkRWFailed += result.networkRWFailed
 		badFailed += result.badFailed
 	}
 
@@ -83,12 +87,13 @@ func printResults(c chan *Result, startTime time.Time) {
 	}
 
 	fmt.Println()
-	fmt.Printf("Requests:            %10d hits\n", requests)
-	fmt.Printf("Successful requests: %10d hits\n", success)
-	fmt.Printf("Network failed:      %10d hits\n", networkFailed)
-	fmt.Printf("Bad failed:          %10d hits\n", badFailed)
-	fmt.Printf("Requests rate:       %10d hits/sec\n", requests/elapsed)
-	fmt.Printf("Test time:           %10d sec\n", elapsed)
+	fmt.Printf("Requests:                       %10d hits\n", requests)
+	fmt.Printf("Successful requests:            %10d hits\n", success)
+	fmt.Printf("Network connect failed:         %10d hits\n", networkConnectFailed)
+	fmt.Printf("Network read/write failed:      %10d hits\n", networkRWFailed)
+	fmt.Printf("Bad requests failed (!2xx):     %10d hits\n", badFailed)
+	fmt.Printf("Requests rate:                  %10d hits/sec\n", requests/elapsed)
+	fmt.Printf("Test time:                      %10d sec\n", elapsed)
 }
 
 func readLines(path string) (lines []string, err error) {
@@ -147,7 +152,7 @@ func NewConfiguration() *Configuration {
 		os.Exit(1)
 	}
 
-	configuration := &Configuration{client: MyClient(time.Duration(connectTimeout)*time.Millisecond, time.Duration(readWriteTimeout)*time.Millisecond),
+	configuration := &Configuration{
 		urls:      make([]string, 0),
 		method:    "GET",
 		postData:  nil,
@@ -202,23 +207,24 @@ func NewConfiguration() *Configuration {
 	return configuration
 }
 
-func TimeoutDialer(connectTimeout, readWriteTimeout time.Duration) func(net, address string) (conn net.Conn, err error) {
+func TimeoutDialer(connectTimeout, readTimeout, writeTimeout time.Duration) func(net, address string) (conn net.Conn, err error) {
 	return func(mynet, address string) (net.Conn, error) {
 		conn, err := net.DialTimeout(mynet, address, connectTimeout)
 		if err != nil {
 			return nil, err
 		}
 
-		conn.SetDeadline(time.Now().Add(readWriteTimeout))
+		conn.SetReadDeadline(time.Now().Add(readTimeout))
+		conn.SetWriteDeadline(time.Now().Add(writeTimeout))
 		return conn, nil
 	}
 }
 
-func MyClient(connectTimeout, readWriteTimeout time.Duration) *http.Client {
+func MyClient(connectTimeout, readTimeout, writeTimeout time.Duration) *http.Client {
 
 	return &http.Client{
 		Transport: &http.Transport{
-			Dial:            TimeoutDialer(connectTimeout, readWriteTimeout),
+			Dial:            TimeoutDialer(connectTimeout, readTimeout, writeTimeout),
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
 	}
@@ -226,7 +232,11 @@ func MyClient(connectTimeout, readWriteTimeout time.Duration) *http.Client {
 
 func client(configuration *Configuration, c chan *Result) {
 
-	result := &Result{requests: 0, success: 0, networkFailed: 0, badFailed: 0}
+	myclient := MyClient(time.Duration(connectTimeout)*time.Millisecond, 
+						 time.Duration(readTimeout)*time.Millisecond,
+						 time.Duration(writeTimeout)*time.Millisecond)
+	
+	result := &Result{requests: 0, success: 0, networkConnectFailed: 0, networkRWFailed:0, badFailed: 0}
 
 	for result.requests < configuration.requests && !interrupted() {
 		for _, tmpUrl := range configuration.urls {
@@ -238,18 +248,18 @@ func client(configuration *Configuration, c chan *Result) {
 				req.Header.Add("Connection", "close")
 			}
 
-			resp, err := configuration.client.Do(req)
+			resp, err := myclient.Do(req)
 			result.requests++
 
 			if err != nil {
-				result.networkFailed++
+				result.networkConnectFailed++
 				continue
 			}
 
 			_, errRead := ioutil.ReadAll(resp.Body)
 
 			if errRead != nil {
-				result.networkFailed++
+				result.networkRWFailed++
 				continue
 			}
 
