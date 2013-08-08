@@ -32,6 +32,7 @@ var (
 	connectTimeout   int
 	writeTimeout     int
 	readTimeout      int
+	requestTimeout   int
 )
 
 type Configuration struct {
@@ -46,9 +47,52 @@ type Configuration struct {
 type Result struct {
 	requests             int64
 	success              int64
-	networkConnectFailed int64
-	networkRWFailed      int64
+	networkFailed        int64
+	networkReadFailed    int64
+	networkWriteFailed   int64
+	requestTimeoutFailed int64
 	badFailed            int64
+}
+
+type MyConn struct {
+	net.Conn
+	m_readTimeout  time.Duration
+	m_writeTimeout time.Duration
+	m_result       *Result
+}
+
+func (this *MyConn) Read(b []byte) (n int, err error) {
+	len, err := this.Conn.Read(b)
+
+	this.Conn.SetReadDeadline(time.Now().Add(this.m_readTimeout))
+
+	if err != nil {
+		if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
+			this.m_result.networkReadFailed++
+			return len, nil
+		}
+
+		this.m_result.networkFailed++
+	}
+
+	return len, nil
+}
+
+func (this *MyConn) Write(b []byte) (n int, err error) {
+	len, err := this.Conn.Write(b)
+
+	this.Conn.SetWriteDeadline(time.Now().Add(this.m_writeTimeout))
+
+	if err != nil {
+		if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
+			this.m_result.networkWriteFailed++
+			return len, nil
+		}
+
+		this.m_result.networkFailed++
+	}
+
+	return len, nil
 }
 
 func init() {
@@ -62,22 +106,27 @@ func init() {
 	flag.IntVar(&connectTimeout, "tc", 5000, "Connect timeout (in milliseconds)")
 	flag.IntVar(&writeTimeout, "tw", 5000, "Write timeout (in milliseconds)")
 	flag.IntVar(&readTimeout, "tr", 5000, "Read timeout (in milliseconds)")
+	flag.IntVar(&requestTimeout, "ta", 5000, "Request timeout (in milliseconds)")
 }
 
 func printResults(c chan *Result, startTime time.Time) {
 	var requests int64
 	var success int64
-	var networkConnectFailed int64
-	var networkRWFailed int64
+	var networkFailed int64
+	var networkReadFailed int64
+	var networkWriteFailed int64
 	var badFailed int64
+	var requestTimeoutFailed int64
 
 	for i := 0; i < clients; i++ {
 		result := <-c
 		requests += result.requests
 		success += result.success
-		networkConnectFailed += result.networkConnectFailed
-		networkRWFailed += result.networkRWFailed
+		networkFailed += result.networkFailed
+		networkReadFailed += result.networkReadFailed
+		networkWriteFailed += result.networkWriteFailed
 		badFailed += result.badFailed
+		requestTimeoutFailed += result.requestTimeoutFailed
 	}
 
 	elapsed := int64(time.Since(startTime).Seconds())
@@ -89,10 +138,12 @@ func printResults(c chan *Result, startTime time.Time) {
 	fmt.Println()
 	fmt.Printf("Requests:                       %10d hits\n", requests)
 	fmt.Printf("Successful requests:            %10d hits\n", success)
-	fmt.Printf("Network connect failed:         %10d hits\n", networkConnectFailed)
-	fmt.Printf("Network read/write failed:      %10d hits\n", networkRWFailed)
+	fmt.Printf("Network failed:                 %10d hits\n", networkFailed)
+	fmt.Printf("Network reads failed:           %10d reads\n", networkReadFailed)
+	fmt.Printf("Network writes failed:          %10d writes\n", networkWriteFailed)
+	fmt.Printf("Requests timeout failed:        %10d hits\n", requestTimeoutFailed)
 	fmt.Printf("Bad requests failed (!2xx):     %10d hits\n", badFailed)
-	fmt.Printf("Requests rate:                  %10d hits/sec\n", requests/elapsed)
+	fmt.Printf("Requests rate:                  %10d hits/sec\n", success/elapsed)
 	fmt.Printf("Test time:                      %10d sec\n", elapsed)
 }
 
@@ -207,7 +258,7 @@ func NewConfiguration() *Configuration {
 	return configuration
 }
 
-func TimeoutDialer(connectTimeout, readTimeout, writeTimeout time.Duration) func(net, address string) (conn net.Conn, err error) {
+func TimeoutDialer(result *Result, connectTimeout, readTimeout, writeTimeout time.Duration) func(net, address string) (conn net.Conn, err error) {
 	return func(mynet, address string) (net.Conn, error) {
 		conn, err := net.DialTimeout(mynet, address, connectTimeout)
 		if err != nil {
@@ -216,15 +267,18 @@ func TimeoutDialer(connectTimeout, readTimeout, writeTimeout time.Duration) func
 
 		conn.SetReadDeadline(time.Now().Add(readTimeout))
 		conn.SetWriteDeadline(time.Now().Add(writeTimeout))
-		return conn, nil
+
+		myConn := &MyConn{Conn: conn, m_readTimeout: readTimeout, m_writeTimeout: writeTimeout, m_result: result}
+
+		return myConn, nil
 	}
 }
 
-func MyClient(connectTimeout, readTimeout, writeTimeout time.Duration) *http.Client {
+func MyClient(result *Result, connectTimeout, readTimeout, writeTimeout time.Duration) *http.Client {
 
 	return &http.Client{
 		Transport: &http.Transport{
-			Dial:            TimeoutDialer(connectTimeout, readTimeout, writeTimeout),
+			Dial:            TimeoutDialer(result, connectTimeout, readTimeout, writeTimeout),
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
 	}
@@ -232,14 +286,15 @@ func MyClient(connectTimeout, readTimeout, writeTimeout time.Duration) *http.Cli
 
 func client(configuration *Configuration, c chan *Result) {
 
-	myclient := MyClient(time.Duration(connectTimeout)*time.Millisecond,
+	result := &Result{}
+
+	myclient := MyClient(result, time.Duration(connectTimeout)*time.Millisecond,
 		time.Duration(readTimeout)*time.Millisecond,
 		time.Duration(writeTimeout)*time.Millisecond)
 
-	result := &Result{requests: 0, success: 0, networkConnectFailed: 0, networkRWFailed: 0, badFailed: 0}
-
 	for result.requests < configuration.requests && !interrupted() {
 		for _, tmpUrl := range configuration.urls {
+			before := time.Now()
 			req, _ := http.NewRequest(configuration.method, tmpUrl, bytes.NewReader(configuration.postData))
 
 			if configuration.keepAlive == true {
@@ -252,14 +307,18 @@ func client(configuration *Configuration, c chan *Result) {
 			result.requests++
 
 			if err != nil {
-				result.networkConnectFailed++
+				result.networkFailed++
 				continue
 			}
 
 			_, errRead := ioutil.ReadAll(resp.Body)
 
 			if errRead != nil {
-				result.networkRWFailed++
+				continue
+			}
+
+			if !time.Now().Before(before.Add(time.Duration(requestTimeout) * time.Millisecond)) {
+				result.requestTimeoutFailed++
 				continue
 			}
 
