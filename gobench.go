@@ -52,6 +52,8 @@ type Result struct {
 	networkWriteFailed   int64
 	requestTimeoutFailed int64
 	badFailed            int64
+	readThroughput		 int64
+	writeThroughput		 int64
 }
 
 type MyConn struct {
@@ -63,7 +65,8 @@ type MyConn struct {
 
 func (this *MyConn) Read(b []byte) (n int, err error) {
 	len, err := this.Conn.Read(b)
-
+	this.m_result.readThroughput += int64(len);
+	
 	this.Conn.SetReadDeadline(time.Now().Add(this.m_readTimeout))
 
 	if err != nil {
@@ -80,6 +83,7 @@ func (this *MyConn) Read(b []byte) (n int, err error) {
 
 func (this *MyConn) Write(b []byte) (n int, err error) {
 	len, err := this.Conn.Write(b)
+	this.m_result.writeThroughput += int64(len);
 
 	this.Conn.SetWriteDeadline(time.Now().Add(this.m_writeTimeout))
 
@@ -117,6 +121,8 @@ func printResults(c chan *Result, startTime time.Time) {
 	var networkWriteFailed int64
 	var badFailed int64
 	var requestTimeoutFailed int64
+	var readThroughput int64
+	var writeThroughput int64
 
 	for i := 0; i < clients; i++ {
 		result := <-c
@@ -127,6 +133,8 @@ func printResults(c chan *Result, startTime time.Time) {
 		networkWriteFailed += result.networkWriteFailed
 		badFailed += result.badFailed
 		requestTimeoutFailed += result.requestTimeoutFailed
+		readThroughput += result.readThroughput
+		writeThroughput += result.writeThroughput
 	}
 
 	elapsed := int64(time.Since(startTime).Seconds())
@@ -144,6 +152,8 @@ func printResults(c chan *Result, startTime time.Time) {
 	fmt.Printf("Requests timeout failed:        %10d hits\n", requestTimeoutFailed)
 	fmt.Printf("Bad requests failed (!2xx):     %10d hits\n", badFailed)
 	fmt.Printf("Requests rate:                  %10d hits/sec\n", success/elapsed)
+	fmt.Printf("Read throughput:                %10d bytes/sec\n", readThroughput/elapsed)
+	fmt.Printf("Write throughput:               %10d bytes/sec\n", writeThroughput/elapsed)
 	fmt.Printf("Test time:                      %10d sec\n", elapsed)
 }
 
@@ -276,8 +286,8 @@ func TimeoutDialer(result *Result, connectTimeout, readTimeout, writeTimeout tim
 
 func MyClient(result *Result, connectTimeout, readTimeout, writeTimeout time.Duration) *http.Client {
 
-	return &http.Client{
-		Transport: &http.Transport{
+	return &http.Client {
+		Transport: &http.Transport {
 			Dial:            TimeoutDialer(result, connectTimeout, readTimeout, writeTimeout),
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
@@ -285,7 +295,13 @@ func MyClient(result *Result, connectTimeout, readTimeout, writeTimeout time.Dur
 }
 
 func client(configuration *Configuration, c chan *Result) {
-
+	defer func() {
+        if r := recover(); r != nil {
+            fmt.Println("caught recover: ", r)
+            os.Exit(1)
+        }
+    }()
+    
 	result := &Result{}
 
 	myclient := MyClient(result, time.Duration(connectTimeout)*time.Millisecond,
@@ -336,7 +352,7 @@ func client(configuration *Configuration, c chan *Result) {
 }
 
 func main() {
-
+    
 	signalChannel := make(chan os.Signal, 2)
 	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM)
 	go func() {
