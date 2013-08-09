@@ -52,8 +52,8 @@ type Result struct {
 	networkWriteFailed   int64
 	requestTimeoutFailed int64
 	badFailed            int64
-	readThroughput		 int64
-	writeThroughput		 int64
+	readThroughput       int64
+	writeThroughput      int64
 }
 
 type MyConn struct {
@@ -65,8 +65,8 @@ type MyConn struct {
 
 func (this *MyConn) Read(b []byte) (n int, err error) {
 	len, err := this.Conn.Read(b)
-	this.m_result.readThroughput += int64(len);
-	
+	this.m_result.readThroughput += int64(len)
+
 	this.Conn.SetReadDeadline(time.Now().Add(this.m_readTimeout))
 
 	if err != nil {
@@ -83,7 +83,7 @@ func (this *MyConn) Read(b []byte) (n int, err error) {
 
 func (this *MyConn) Write(b []byte) (n int, err error) {
 	len, err := this.Conn.Write(b)
-	this.m_result.writeThroughput += int64(len);
+	this.m_result.writeThroughput += int64(len)
 
 	this.Conn.SetWriteDeadline(time.Now().Add(this.m_writeTimeout))
 
@@ -286,8 +286,8 @@ func TimeoutDialer(result *Result, connectTimeout, readTimeout, writeTimeout tim
 
 func MyClient(result *Result, connectTimeout, readTimeout, writeTimeout time.Duration) *http.Client {
 
-	return &http.Client {
-		Transport: &http.Transport {
+	return &http.Client{
+		Transport: &http.Transport{
 			Dial:            TimeoutDialer(result, connectTimeout, readTimeout, writeTimeout),
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
@@ -296,12 +296,12 @@ func MyClient(result *Result, connectTimeout, readTimeout, writeTimeout time.Dur
 
 func client(configuration *Configuration, c chan *Result) {
 	defer func() {
-        if r := recover(); r != nil {
-            fmt.Println("caught recover: ", r)
-            os.Exit(1)
-        }
-    }()
-    
+		if r := recover(); r != nil {
+			fmt.Println("caught recover: ", r)
+			os.Exit(1)
+		}
+	}()
+
 	result := &Result{}
 
 	myclient := MyClient(result, time.Duration(connectTimeout)*time.Millisecond,
@@ -352,7 +352,7 @@ func client(configuration *Configuration, c chan *Result) {
 }
 
 func main() {
-    
+
 	signalChannel := make(chan os.Signal, 2)
 	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM)
 	go func() {
