@@ -43,16 +43,13 @@ The funny part - I do some benchmark to the client tester tool and not to the se
     Dispatching 500 clients
     Waiting for results...
 
-    Requests:                           360093 hits
-    Successful requests:                360093 hits
+    Requests:                           343669 hits
+    Successful requests:                343669 hits
     Network failed:                          0 hits
-    Network reads failed:                    0 reads
-    Network writes failed:                   0 writes
-    Requests timeout failed:                 0 hits
     Bad requests failed (!2xx):              0 hits
-    Requests rate:                       36009 hits/sec
-    Read throughput:                  57290846 bytes/sec
-    Write throughput:                  4321104 bytes/sec
+    Successfull requests rate:           34366 hits/sec
+    Read throughput:                  54700061 bytes/sec
+    Write throughput:                  4128684 bytes/sec
     Test time:                              10 sec
 
 

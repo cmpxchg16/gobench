@@ -14,12 +14,10 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
-	"sync/atomic"
+	"sync"
 	"syscall"
 	"time"
 )
-
-var intrrupted int32 = 0
 
 var (
 	requests         int64
@@ -32,7 +30,6 @@ var (
 	connectTimeout   int
 	writeTimeout     int
 	readTimeout      int
-	requestTimeout   int
 )
 
 type Configuration struct {
@@ -45,58 +42,41 @@ type Configuration struct {
 }
 
 type Result struct {
-	requests             int64
-	success              int64
-	networkFailed        int64
-	networkReadFailed    int64
-	networkWriteFailed   int64
-	requestTimeoutFailed int64
-	badFailed            int64
-	readThroughput       int64
-	writeThroughput      int64
+	requests        int64
+	success         int64
+	networkFailed   int64
+	badFailed       int64
+	readThroughput  int64
+	writeThroughput int64
 }
 
 type MyConn struct {
 	net.Conn
-	m_readTimeout  time.Duration
-	m_writeTimeout time.Duration
-	m_result       *Result
+	readTimeout  time.Duration
+	writeTimeout time.Duration
+	result       *Result
 }
 
 func (this *MyConn) Read(b []byte) (n int, err error) {
 	len, err := this.Conn.Read(b)
-	this.m_result.readThroughput += int64(len)
 
-	this.Conn.SetReadDeadline(time.Now().Add(this.m_readTimeout))
-
-	if err != nil {
-		if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
-			this.m_result.networkReadFailed++
-			return len, nil
-		}
-
-		this.m_result.networkFailed++
+	if err == nil {
+		this.result.readThroughput += int64(len)
+		this.Conn.SetReadDeadline(time.Now().Add(this.readTimeout))
 	}
 
-	return len, nil
+	return len, err
 }
 
 func (this *MyConn) Write(b []byte) (n int, err error) {
 	len, err := this.Conn.Write(b)
-	this.m_result.writeThroughput += int64(len)
 
-	this.Conn.SetWriteDeadline(time.Now().Add(this.m_writeTimeout))
-
-	if err != nil {
-		if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
-			this.m_result.networkWriteFailed++
-			return len, nil
-		}
-
-		this.m_result.networkFailed++
+	if err == nil {
+		this.result.writeThroughput += int64(len)
+		this.Conn.SetWriteDeadline(time.Now().Add(this.writeTimeout))
 	}
 
-	return len, nil
+	return len, err
 }
 
 func init() {
@@ -110,29 +90,21 @@ func init() {
 	flag.IntVar(&connectTimeout, "tc", 5000, "Connect timeout (in milliseconds)")
 	flag.IntVar(&writeTimeout, "tw", 5000, "Write timeout (in milliseconds)")
 	flag.IntVar(&readTimeout, "tr", 5000, "Read timeout (in milliseconds)")
-	flag.IntVar(&requestTimeout, "ta", 5000, "Request timeout (in milliseconds)")
 }
 
-func printResults(c chan *Result, startTime time.Time) {
+func printResults(results map[int]*Result, startTime time.Time) {
 	var requests int64
 	var success int64
 	var networkFailed int64
-	var networkReadFailed int64
-	var networkWriteFailed int64
 	var badFailed int64
-	var requestTimeoutFailed int64
 	var readThroughput int64
 	var writeThroughput int64
 
-	for i := 0; i < clients; i++ {
-		result := <-c
+	for _, result := range results {
 		requests += result.requests
 		success += result.success
 		networkFailed += result.networkFailed
-		networkReadFailed += result.networkReadFailed
-		networkWriteFailed += result.networkWriteFailed
 		badFailed += result.badFailed
-		requestTimeoutFailed += result.requestTimeoutFailed
 		readThroughput += result.readThroughput
 		writeThroughput += result.writeThroughput
 	}
@@ -147,11 +119,8 @@ func printResults(c chan *Result, startTime time.Time) {
 	fmt.Printf("Requests:                       %10d hits\n", requests)
 	fmt.Printf("Successful requests:            %10d hits\n", success)
 	fmt.Printf("Network failed:                 %10d hits\n", networkFailed)
-	fmt.Printf("Network reads failed:           %10d reads\n", networkReadFailed)
-	fmt.Printf("Network writes failed:          %10d writes\n", networkWriteFailed)
-	fmt.Printf("Requests timeout failed:        %10d hits\n", requestTimeoutFailed)
 	fmt.Printf("Bad requests failed (!2xx):     %10d hits\n", badFailed)
-	fmt.Printf("Requests rate:                  %10d hits/sec\n", success/elapsed)
+	fmt.Printf("Successfull requests rate:      %10d hits/sec\n", success/elapsed)
 	fmt.Printf("Read throughput:                %10d bytes/sec\n", readThroughput/elapsed)
 	fmt.Printf("Write throughput:               %10d bytes/sec\n", writeThroughput/elapsed)
 	fmt.Printf("Test time:                      %10d sec\n", elapsed)
@@ -184,14 +153,6 @@ func readLines(path string) (lines []string, err error) {
 		err = nil
 	}
 	return
-}
-
-func interrupted() bool {
-	return atomic.LoadInt32(&intrrupted) != 0
-}
-
-func interrupt() {
-	atomic.StoreInt32(&intrrupted, 1)
 }
 
 func NewConfiguration() *Configuration {
@@ -231,7 +192,7 @@ func NewConfiguration() *Configuration {
 
 		go func() {
 			<-timeout
-			interrupt()
+			syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
 		}()
 	}
 
@@ -278,7 +239,7 @@ func TimeoutDialer(result *Result, connectTimeout, readTimeout, writeTimeout tim
 		conn.SetReadDeadline(time.Now().Add(readTimeout))
 		conn.SetWriteDeadline(time.Now().Add(writeTimeout))
 
-		myConn := &MyConn{Conn: conn, m_readTimeout: readTimeout, m_writeTimeout: writeTimeout, m_result: result}
+		myConn := &MyConn{Conn: conn, readTimeout: readTimeout, writeTimeout: writeTimeout, result: result}
 
 		return myConn, nil
 	}
@@ -294,7 +255,7 @@ func MyClient(result *Result, connectTimeout, readTimeout, writeTimeout time.Dur
 	}
 }
 
-func client(configuration *Configuration, c chan *Result) {
+func client(configuration *Configuration, result *Result, done *sync.WaitGroup) {
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Println("caught recover: ", r)
@@ -302,15 +263,12 @@ func client(configuration *Configuration, c chan *Result) {
 		}
 	}()
 
-	result := &Result{}
-
 	myclient := MyClient(result, time.Duration(connectTimeout)*time.Millisecond,
 		time.Duration(readTimeout)*time.Millisecond,
 		time.Duration(writeTimeout)*time.Millisecond)
 
-	for result.requests < configuration.requests && !interrupted() {
+	for result.requests < configuration.requests {
 		for _, tmpUrl := range configuration.urls {
-			before := time.Now()
 			req, _ := http.NewRequest(configuration.method, tmpUrl, bytes.NewReader(configuration.postData))
 
 			if configuration.keepAlive == true {
@@ -330,11 +288,7 @@ func client(configuration *Configuration, c chan *Result) {
 			_, errRead := ioutil.ReadAll(resp.Body)
 
 			if errRead != nil {
-				continue
-			}
-
-			if !time.Now().Before(before.Add(time.Duration(requestTimeout) * time.Millisecond)) {
-				result.requestTimeoutFailed++
+				result.networkFailed++
 				continue
 			}
 
@@ -348,16 +302,21 @@ func client(configuration *Configuration, c chan *Result) {
 		}
 	}
 
-	c <- result
+	done.Done()
 }
 
 func main() {
+
+	startTime := time.Now()
+	var done sync.WaitGroup
+	results := make(map[int]*Result)
 
 	signalChannel := make(chan os.Signal, 2)
 	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		_ = <-signalChannel
-		interrupt()
+		printResults(results, startTime)
+		os.Exit(0)
 	}()
 
 	flag.Parse()
@@ -370,16 +329,16 @@ func main() {
 		runtime.GOMAXPROCS(runtime.NumCPU())
 	}
 
-	resultChannel := make(chan *Result)
-
 	fmt.Printf("Dispatching %d clients\n", clients)
 
-	startTime := time.Now()
+	done.Add(clients)
 	for i := 0; i < clients; i++ {
-
-		go client(configuration, resultChannel)
+		result := &Result{}
+		results[i] = result
+		go client(configuration, result, &done)
 
 	}
 	fmt.Println("Waiting for results...")
-	printResults(resultChannel, startTime)
+	done.Wait()
+	printResults(results, startTime)
 }
