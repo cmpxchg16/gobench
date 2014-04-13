@@ -79,6 +79,7 @@ Notes
     ```$>go build gobench.go```
     
 2. Because it's a test tool, in HTTPS the ceritificate verification is insecure
+3. use Go >= 1.1 (1.1 including major bug fixes)
 
 Help
 ================
