@@ -245,9 +245,9 @@ func MyClient(result *Result, connectTimeout, readTimeout, writeTimeout time.Dur
 
 	return &http.Client{
 		Transport: &http.Transport{
-			Dial:            	TimeoutDialer(result, connectTimeout, readTimeout, writeTimeout),
-			TLSClientConfig: 	&tls.Config{InsecureSkipVerify: true},
-			DisableKeepAlives: 	!keepAlive,
+			Dial:              TimeoutDialer(result, connectTimeout, readTimeout, writeTimeout),
+			TLSClientConfig:   &tls.Config{InsecureSkipVerify: true},
+			DisableKeepAlives: !keepAlive,
 		},
 	}
 }
