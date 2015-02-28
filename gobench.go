@@ -15,7 +15,6 @@ import (
 	"os/signal"
 	"runtime"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -192,7 +191,13 @@ func NewConfiguration() *Configuration {
 
 		go func() {
 			<-timeout
-			syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
+			pid := os.Getpid()
+			proc, _ := os.FindProcess(pid)
+			err := proc.Signal(os.Interrupt)
+			if err != nil {
+				log.Println(err)
+				return
+			}
 		}()
 	}
 
@@ -249,9 +254,9 @@ func MyClient(result *Result, connectTimeout, readTimeout, writeTimeout time.Dur
 
 	return &http.Client{
 		Transport: &http.Transport{
-			Dial:            	TimeoutDialer(result, connectTimeout, readTimeout, writeTimeout),
-			TLSClientConfig: 	&tls.Config{InsecureSkipVerify: true},
-			DisableKeepAlives: 	!keepAlive,
+			Dial:              TimeoutDialer(result, connectTimeout, readTimeout, writeTimeout),
+			TLSClientConfig:   &tls.Config{InsecureSkipVerify: true},
+			DisableKeepAlives: !keepAlive,
 		},
 	}
 }
@@ -313,7 +318,7 @@ func main() {
 	results := make(map[int]*Result)
 
 	signalChannel := make(chan os.Signal, 2)
-	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(signalChannel, os.Interrupt)
 	go func() {
 		_ = <-signalChannel
 		printResults(results, startTime)
