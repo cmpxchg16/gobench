@@ -19,27 +19,31 @@ import (
 )
 
 var (
-	requests         int64
-	period           int64
-	clients          int
-	url              string
-	urlsFilePath     string
-	keepAlive        bool
-	postDataFilePath string
-	connectTimeout   int
-	writeTimeout     int
-	readTimeout      int
-	authHeader       string
+	requests           int64
+	period             int64
+	clients            int
+	url                string
+	urlsFilePath       string
+	keepAlive          bool
+	postDataFilePath   string
+	connectTimeout     int
+	writeTimeout       int
+	readTimeout        int
+	authHeader         string
+	lowerStatusSuccess int
+	upperStatusSuccess int
 )
 
 type Configuration struct {
-	urls       []string
-	method     string
-	postData   []byte
-	requests   int64
-	period     int64
-	keepAlive  bool
-	authHeader string
+	urls               []string
+	method             string
+	postData           []byte
+	requests           int64
+	period             int64
+	keepAlive          bool
+	authHeader         string
+	lowerStatusSuccess int
+	upperStatusSuccess int
 }
 
 type Result struct {
@@ -92,6 +96,8 @@ func init() {
 	flag.IntVar(&writeTimeout, "tw", 5000, "Write timeout (in milliseconds)")
 	flag.IntVar(&readTimeout, "tr", 5000, "Read timeout (in milliseconds)")
 	flag.StringVar(&authHeader, "auth", "", "Authorization header")
+	flag.IntVar(&lowerStatusSuccess, "ls", 200, "Lower success status code")
+	flag.IntVar(&upperStatusSuccess, "us", 299, "Upper success status code")
 }
 
 func printResults(results map[int]*Result, startTime time.Time) {
@@ -177,12 +183,14 @@ func NewConfiguration() *Configuration {
 	}
 
 	configuration := &Configuration{
-		urls:       make([]string, 0),
-		method:     "GET",
-		postData:   nil,
-		keepAlive:  keepAlive,
-		requests:   int64((1 << 63) - 1),
-		authHeader: authHeader}
+		urls:               make([]string, 0),
+		method:             "GET",
+		postData:           nil,
+		keepAlive:          keepAlive,
+		requests:           int64((1 << 63) - 1),
+		authHeader:         authHeader,
+		lowerStatusSuccess: lowerStatusSuccess,
+		upperStatusSuccess: upperStatusSuccess}
 
 	if period != -1 {
 		configuration.period = period
@@ -306,7 +314,8 @@ func client(configuration *Configuration, result *Result, done *sync.WaitGroup) 
 				continue
 			}
 
-			if resp.StatusCode == http.StatusOK {
+			if resp.StatusCode >= configuration.lowerStatusSuccess &&
+				resp.StatusCode <= configuration.upperStatusSuccess {
 				result.success++
 			} else {
 				result.badFailed++
