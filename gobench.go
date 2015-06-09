@@ -397,7 +397,16 @@ func client(configuration *Configuration, result *Result, done *sync.WaitGroup) 
 				continue
 			}
 
-			_, errRead := ioutil.ReadAll(resp.Body)
+			//_, errRead := ioutil.ReadAll(resp.Body)
+                        // use a memory efficient way
+                        _m := make([]byte,1024)
+                        var errRead error = nil
+                        for errRead==nil {
+                            _,errRead = resp.Body.Read(_m)
+                        }
+                        if errRead == io.EOF {
+                            errRead = nil
+                        }
 
 			if errRead != nil {
 				result.networkFailed++
