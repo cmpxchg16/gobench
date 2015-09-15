@@ -16,6 +16,10 @@ import (
 	"runtime"
 	"sync"
 	"time"
+        "strings"
+        "math/rand"
+        "strconv"
+        "errors"
 )
 
 var (
@@ -30,7 +34,9 @@ var (
 	writeTimeout     int
 	readTimeout      int
 )
-
+const (
+        maxExpandNum = 1000
+)
 type Configuration struct {
 	urls      []string
 	method    string
@@ -81,7 +87,14 @@ func (this *MyConn) Write(b []byte) (n int, err error) {
 func init() {
 	flag.Int64Var(&requests, "r", -1, "Number of requests per client")
 	flag.IntVar(&clients, "c", 100, "Number of concurrent clients")
-	flag.StringVar(&url, "u", "", "URL")
+        flag.StringVar(&url, "u", "", fmt.Sprintf(`URL. Support expression such as {S10,1-100}  {R14,2-9}.
+            S or s means sequence number between [1,100] , the amount is 10, as specified in the expression.
+            R or r means random number between [2,9] , the amount is 14. 
+            We will generate at most %d urls one time, for the security reason.
+            For example : http://www.qq.com/?{s3,1-10} will produce 3 lines as follow
+            http://www.qq.com?1
+            http://www.qq.com?2
+            http://www.qq.com?3 `, maxExpandNum))
 	flag.StringVar(&urlsFilePath, "f", "", "URL's file path (line seperated)")
 	flag.BoolVar(&keepAlive, "k", true, "Do HTTP keep-alive")
 	flag.StringVar(&postDataFilePath, "d", "", "HTTP POST data file path")
@@ -120,8 +133,10 @@ func printResults(results map[int]*Result, startTime time.Time) {
 	fmt.Printf("Network failed:                 %10d hits\n", networkFailed)
 	fmt.Printf("Bad requests failed (!2xx):     %10d hits\n", badFailed)
 	fmt.Printf("Successful requests rate:       %10d hits/sec\n", success/elapsed)
-	fmt.Printf("Read throughput:                %10d bytes/sec\n", readThroughput/elapsed)
-	fmt.Printf("Write throughput:               %10d bytes/sec\n", writeThroughput/elapsed)
+        fmt.Printf("Read transferred:               %10d bytes\n", readThroughput)  // add to contrast it with ab
+        fmt.Printf("Write transferred:              %10d bytes\n", writeThroughput)
+	fmt.Printf("Read Speed:                     %10d bytes/sec\n", readThroughput/elapsed)
+	fmt.Printf("Write Speed:                    %10d bytes/sec\n", writeThroughput/elapsed)
 	fmt.Printf("Test time:                      %10d sec\n", elapsed)
 }
 
@@ -216,7 +231,8 @@ func NewConfiguration() *Configuration {
 	}
 
 	if url != "" {
-		configuration.urls = append(configuration.urls, url)
+		//configuration.urls = append(configuration.urls, url)
+		configuration.urls = append(configuration.urls, expandUrl(url)...)
 	}
 
 	if postDataFilePath != "" {
@@ -262,6 +278,96 @@ func MyClient(result *Result, connectTimeout, readTimeout, writeTimeout time.Dur
 	}
 }
 
+
+// 模板1，开如 S123,1-1000
+// 即，以字母开头，紧跟一个数字表示生成个数，逗号，数据范围 from-to
+func expression_template_1(e []byte) (n,from,to int, err error) {
+    n , from , to ,err = 0,0,0,nil
+    if e==nil || len(e)<6 {
+        err = errors.New("invalid url expression: length not enough")
+        return
+    }
+    if bytes.IndexAny(e[0:1],"SsRr")==0 {
+        comma_cutted := bytes.SplitN(e[1:], []byte{','},2)
+        if comma_cutted == nil || len(comma_cutted)<2{
+            err = errors.New("invalid url expression: no enough comma seperated fields")
+            return
+        }
+        if n,err = strconv.Atoi( string(comma_cutted[0]) ); err != nil {
+            return
+        }
+        dash_cutted := bytes.SplitN(comma_cutted[1], []byte{'-'}, 2);
+        if dash_cutted == nil || len(dash_cutted)<2 {
+            err = errors.New("invalid url expression: range invalid");
+            return
+        }
+        if from,err = strconv.Atoi(string(dash_cutted[0])); err != nil {
+            return
+        }
+        if to,err = strconv.Atoi(string(dash_cutted[1])); err != nil {
+            return
+        }
+        return
+    }else {
+        err = errors.New("invalid url expression: expression not suit for the template1");
+        return
+    }
+}
+
+
+
+// 按表达式生成具体的数值
+// e.g. : e="R3,0-9" 将会生成3个随机数，范围在[0,9]
+// e="S3,0-9" 将会生成 0,1,2 三个顺序数
+// 最多生成1000个
+func genValue(e []byte) (values []string) {
+    values = nil
+    if len(e)==0 {
+        return
+    }
+    switch e[0] {
+        case 'S' , 's':
+            // sequence
+            n,from,to,err := expression_template_1(e)
+            if err!=nil {
+                log.Fatal(err)
+            }
+            for i:=from;i<=to && i-from<n && i-from<maxExpandNum ;i++ {
+                values = append(values, fmt.Sprintf("%d",i))
+            }
+        case 'R' , 'r':
+            // random
+            n,from,to,err := expression_template_1(e)
+            if err!=nil {
+                log.Fatal(err)
+            }
+            for i:=0;i<n && i<maxExpandNum;i++ {
+                values = append(values, fmt.Sprintf("%d",rand.Intn(to-from+1)+from))
+            }
+        default :
+            return
+        }
+    return
+}
+// expand the {....} symbol to a value list
+// For now, only support sequence expand e.g. {S1,99} or {1,99} ;  rand expand {R1,99} ;
+func expandUrl(u string) (ret_urls []string ){
+        ret_urls = nil
+        url := []byte(u)
+        leftBracket,rightBracket := bytes.IndexByte(url, '{'), bytes.IndexByte(url,'}')
+        if leftBracket>4 && rightBracket>4 && leftBracket<rightBracket{
+            expanded_value := genValue(url[leftBracket+1:rightBracket])
+            for i,gen := range expanded_value {
+                ret_urls = append(ret_urls,
+                    strings.Replace(u,u[leftBracket:rightBracket+1],gen,1) )
+                    fmt.Printf( "debug: gen url [%d]:%s\n",i, ret_urls[len(ret_urls)-1])
+            }
+        } else {
+            ret_urls = append(ret_urls,u)
+        }
+        return
+}
+
 func client(configuration *Configuration, result *Result, done *sync.WaitGroup) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -292,7 +398,16 @@ func client(configuration *Configuration, result *Result, done *sync.WaitGroup) 
 				continue
 			}
 
-			_, errRead := ioutil.ReadAll(resp.Body)
+			//_, errRead := ioutil.ReadAll(resp.Body)
+                        // use a memory efficient way
+                        _m := make([]byte,1024)
+                        var errRead error = nil
+                        for errRead==nil {
+                            _,errRead = resp.Body.Read(_m)
+                        }
+                        if errRead == io.EOF {
+                            errRead = nil
+                        }
 
 			if errRead != nil {
 				result.networkFailed++
