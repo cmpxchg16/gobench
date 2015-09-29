@@ -301,6 +301,7 @@ func client(configuration *Configuration, result *Result, done *sync.WaitGroup) 
 			} else if len(configuration.postData) > 0 {
 				req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 			}
+
 			resp, err := myclient.Do(req)
 			result.requests++
 
