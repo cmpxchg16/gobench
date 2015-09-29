@@ -30,16 +30,18 @@ var (
 	writeTimeout     int
 	readTimeout      int
 	authHeader       string
+	contentType      string
 )
 
 type Configuration struct {
-	urls       []string
-	method     string
-	postData   []byte
-	requests   int64
-	period     int64
-	keepAlive  bool
-	authHeader string
+	urls        []string
+	method      string
+	postData    []byte
+	requests    int64
+	period      int64
+	keepAlive   bool
+	authHeader  string
+	contentType string
 }
 
 type Result struct {
@@ -92,6 +94,7 @@ func init() {
 	flag.IntVar(&writeTimeout, "tw", 5000, "Write timeout (in milliseconds)")
 	flag.IntVar(&readTimeout, "tr", 5000, "Read timeout (in milliseconds)")
 	flag.StringVar(&authHeader, "auth", "", "Authorization header")
+	flag.StringVar(&contentType, "type", "", "Content-Type header")
 }
 
 func printResults(results map[int]*Result, startTime time.Time) {
@@ -177,12 +180,13 @@ func NewConfiguration() *Configuration {
 	}
 
 	configuration := &Configuration{
-		urls:       make([]string, 0),
-		method:     "GET",
-		postData:   nil,
-		keepAlive:  keepAlive,
-		requests:   int64((1 << 63) - 1),
-		authHeader: authHeader}
+		urls:        make([]string, 0),
+		method:      "GET",
+		postData:    nil,
+		keepAlive:   keepAlive,
+		requests:    int64((1 << 63) - 1),
+		authHeader:  authHeader,
+		contentType: contentType}
 
 	if period != -1 {
 		configuration.period = period
@@ -289,6 +293,13 @@ func client(configuration *Configuration, result *Result, done *sync.WaitGroup) 
 
 			if len(configuration.authHeader) > 0 {
 				req.Header.Add("Authorization", configuration.authHeader)
+			}
+
+			if len(configuration.contentType) > 0 {
+				req.Header.Add("Content-Type", contentType)
+
+			} else if len(configuration.postData) > 0 {
+				req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 			}
 
 			resp, err := myclient.Do(req)
