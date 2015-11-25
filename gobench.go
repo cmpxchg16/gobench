@@ -111,8 +111,8 @@ func printResults(results map[int]*Result, startTime time.Time) {
 		writeThroughput += result.writeThroughput
 	}
 
-	elapsed := int64(time.Since(startTime).Seconds())
-
+	elapsed := time.Since(startTime).Seconds()
+	
 	if elapsed == 0 {
 		elapsed = 1
 	}
@@ -122,10 +122,10 @@ func printResults(results map[int]*Result, startTime time.Time) {
 	fmt.Printf("Successful requests:            %10d hits\n", success)
 	fmt.Printf("Network failed:                 %10d hits\n", networkFailed)
 	fmt.Printf("Bad requests failed (!2xx):     %10d hits\n", badFailed)
-	fmt.Printf("Successful requests rate:       %10d hits/sec\n", success/elapsed)
-	fmt.Printf("Read throughput:                %10d bytes/sec\n", readThroughput/elapsed)
-	fmt.Printf("Write throughput:               %10d bytes/sec\n", writeThroughput/elapsed)
-	fmt.Printf("Test time:                      %10d sec\n", elapsed)
+	fmt.Printf("Successful requests rate:       %10.0f hits/sec\n", float64(success)/elapsed)
+	fmt.Printf("Read throughput:                %10.0f bytes/sec\n", float64(readThroughput)/elapsed)
+	fmt.Printf("Write throughput:               %10.0f bytes/sec\n", float64(writeThroughput)/elapsed)
+	fmt.Printf("Test time:                      %10.2f sec\n", elapsed)
 }
 
 func readLines(path string) (lines []string, err error) {
