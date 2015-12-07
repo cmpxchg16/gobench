@@ -291,6 +291,8 @@ func client(configuration *Configuration, result *Result, done *sync.WaitGroup) 
 				req.Header.Add("Authorization", configuration.authHeader)
 			}
 
+			req.Header.Add("Accept", "*/*")
+
 			resp, err := myclient.Do(req)
 			result.requests++
 
