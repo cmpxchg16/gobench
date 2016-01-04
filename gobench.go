@@ -3,19 +3,20 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"crypto/tls"
 	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/valyala/fasthttp"
 )
 
 var (
@@ -26,7 +27,6 @@ var (
 	urlsFilePath     string
 	keepAlive        bool
 	postDataFilePath string
-	connectTimeout   int
 	writeTimeout     int
 	readTimeout      int
 	authHeader       string
@@ -40,30 +40,29 @@ type Configuration struct {
 	period     int64
 	keepAlive  bool
 	authHeader string
+
+	myClient fasthttp.Client
 }
 
 type Result struct {
-	requests        int64
-	success         int64
-	networkFailed   int64
-	badFailed       int64
-	readThroughput  int64
-	writeThroughput int64
+	requests      int64
+	success       int64
+	networkFailed int64
+	badFailed     int64
 }
+
+var readThroughput int64
+var writeThroughput int64
 
 type MyConn struct {
 	net.Conn
-	readTimeout  time.Duration
-	writeTimeout time.Duration
-	result       *Result
 }
 
 func (this *MyConn) Read(b []byte) (n int, err error) {
 	len, err := this.Conn.Read(b)
 
 	if err == nil {
-		this.result.readThroughput += int64(len)
-		this.Conn.SetReadDeadline(time.Now().Add(this.readTimeout))
+		atomic.AddInt64(&readThroughput, int64(len))
 	}
 
 	return len, err
@@ -73,8 +72,7 @@ func (this *MyConn) Write(b []byte) (n int, err error) {
 	len, err := this.Conn.Write(b)
 
 	if err == nil {
-		this.result.writeThroughput += int64(len)
-		this.Conn.SetWriteDeadline(time.Now().Add(this.writeTimeout))
+		atomic.AddInt64(&writeThroughput, int64(len))
 	}
 
 	return len, err
@@ -88,7 +86,6 @@ func init() {
 	flag.BoolVar(&keepAlive, "k", true, "Do HTTP keep-alive")
 	flag.StringVar(&postDataFilePath, "d", "", "HTTP POST data file path")
 	flag.Int64Var(&period, "t", -1, "Period of time (in seconds)")
-	flag.IntVar(&connectTimeout, "tc", 5000, "Connect timeout (in milliseconds)")
 	flag.IntVar(&writeTimeout, "tw", 5000, "Write timeout (in milliseconds)")
 	flag.IntVar(&readTimeout, "tr", 5000, "Read timeout (in milliseconds)")
 	flag.StringVar(&authHeader, "auth", "", "Authorization header")
@@ -99,16 +96,12 @@ func printResults(results map[int]*Result, startTime time.Time) {
 	var success int64
 	var networkFailed int64
 	var badFailed int64
-	var readThroughput int64
-	var writeThroughput int64
 
 	for _, result := range results {
 		requests += result.requests
 		success += result.success
 		networkFailed += result.networkFailed
 		badFailed += result.badFailed
-		readThroughput += result.readThroughput
-		writeThroughput += result.writeThroughput
 	}
 
 	elapsed := int64(time.Since(startTime).Seconds())
@@ -235,84 +228,64 @@ func NewConfiguration() *Configuration {
 		configuration.postData = data
 	}
 
+	configuration.myClient.ReadTimeout = time.Duration(readTimeout) * time.Millisecond
+	configuration.myClient.WriteTimeout = time.Duration(writeTimeout) * time.Millisecond
+	configuration.myClient.Dial = MyDialer()
+
 	return configuration
 }
 
-func TimeoutDialer(result *Result, connectTimeout, readTimeout, writeTimeout time.Duration) func(net, address string) (conn net.Conn, err error) {
-	return func(mynet, address string) (net.Conn, error) {
-		conn, err := net.DialTimeout(mynet, address, connectTimeout)
+func MyDialer() func(address string) (conn net.Conn, err error) {
+	return func(address string) (net.Conn, error) {
+		conn, err := net.Dial("tcp", address)
 		if err != nil {
 			return nil, err
 		}
 
-		conn.SetReadDeadline(time.Now().Add(readTimeout))
-		conn.SetWriteDeadline(time.Now().Add(writeTimeout))
-
-		myConn := &MyConn{Conn: conn, readTimeout: readTimeout, writeTimeout: writeTimeout, result: result}
+		myConn := &MyConn{Conn: conn}
 
 		return myConn, nil
 	}
 }
 
-func MyClient(result *Result, connectTimeout, readTimeout, writeTimeout time.Duration) *http.Client {
-
-	return &http.Client{
-		Transport: &http.Transport{
-			Dial:              TimeoutDialer(result, connectTimeout, readTimeout, writeTimeout),
-			TLSClientConfig:   &tls.Config{InsecureSkipVerify: true},
-			DisableKeepAlives: !keepAlive,
-		},
-	}
-}
-
 func client(configuration *Configuration, result *Result, done *sync.WaitGroup) {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Println("caught recover: ", r)
-			os.Exit(1)
-		}
-	}()
-
-	myclient := MyClient(result, time.Duration(connectTimeout)*time.Millisecond,
-		time.Duration(readTimeout)*time.Millisecond,
-		time.Duration(writeTimeout)*time.Millisecond)
-
 	for result.requests < configuration.requests {
 		for _, tmpUrl := range configuration.urls {
-			req, _ := http.NewRequest(configuration.method, tmpUrl, bytes.NewReader(configuration.postData))
+
+			req := fasthttp.AcquireRequest()
+
+			req.SetRequestURI(tmpUrl)
+			req.Header.SetMethodBytes([]byte(configuration.method))
 
 			if configuration.keepAlive == true {
-				req.Header.Add("Connection", "keep-alive")
+				req.Header.Set("Connection", "keep-alive")
 			} else {
-				req.Header.Add("Connection", "close")
+				req.Header.Set("Connection", "close")
 			}
 
 			if len(configuration.authHeader) > 0 {
-				req.Header.Add("Authorization", configuration.authHeader)
+				req.Header.Set("Authorization", configuration.authHeader)
 			}
 
-			resp, err := myclient.Do(req)
+			req.SetBody(configuration.postData)
+
+			resp := fasthttp.AcquireResponse()
+			err := configuration.myClient.Do(req, resp)
+			statusCode := resp.StatusCode()
 			result.requests++
+			fasthttp.ReleaseRequest(req)
+			fasthttp.ReleaseResponse(resp)
 
 			if err != nil {
 				result.networkFailed++
 				continue
 			}
 
-			_, errRead := ioutil.ReadAll(resp.Body)
-
-			if errRead != nil {
-				result.networkFailed++
-				continue
-			}
-
-			if resp.StatusCode == http.StatusOK {
+			if statusCode == fasthttp.StatusOK {
 				result.success++
 			} else {
 				result.badFailed++
 			}
-
-			resp.Body.Close()
 		}
 	}
 
