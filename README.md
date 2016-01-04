@@ -39,7 +39,7 @@ The funny part - I did some benchmark to the client tester tool and not to the s
     
 ###GoBench:
 
-    $>go run gobench.go -k=true -u http://localhost:80 -c 500 -t 10
+    $>gobench -k=true -u http://localhost:80 -c 500 -t 10
     Dispatching 500 clients
     Waiting for results...
 
