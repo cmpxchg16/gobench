@@ -230,7 +230,8 @@ func NewConfiguration() *Configuration {
 
 	configuration.myClient.ReadTimeout = time.Duration(readTimeout) * time.Millisecond
 	configuration.myClient.WriteTimeout = time.Duration(writeTimeout) * time.Millisecond
-	configuration.myClient.MaxConnsPerHost = clients * 2
+	configuration.myClient.MaxConnsPerHost = clients
+
 	configuration.myClient.Dial = MyDialer()
 
 	return configuration
@@ -278,6 +279,7 @@ func client(configuration *Configuration, result *Result, done *sync.WaitGroup) 
 			fasthttp.ReleaseResponse(resp)
 
 			if err != nil {
+				fmt.Println(err)
 				result.networkFailed++
 				continue
 			}
