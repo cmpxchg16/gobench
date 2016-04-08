@@ -230,7 +230,7 @@ func NewConfiguration() *Configuration {
 
 	configuration.myClient.ReadTimeout = time.Duration(readTimeout) * time.Millisecond
 	configuration.myClient.WriteTimeout = time.Duration(writeTimeout) * time.Millisecond
-	configuration.myClient.MaxConnsPerHost = clients
+	configuration.myClient.MaxConnsPerHost = clients * 2
 	configuration.myClient.Dial = MyDialer()
 
 	return configuration
