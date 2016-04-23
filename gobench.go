@@ -279,7 +279,6 @@ func client(configuration *Configuration, result *Result, done *sync.WaitGroup) 
 			fasthttp.ReleaseResponse(resp)
 
 			if err != nil {
-				fmt.Println(err)
 				result.networkFailed++
 				continue
 			}
