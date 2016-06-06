@@ -12,10 +12,13 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/pborman/uuid"
 	"github.com/valyala/fasthttp"
 )
 
@@ -30,16 +33,18 @@ var (
 	writeTimeout     int
 	readTimeout      int
 	authHeader       string
+	uriSubstitution  bool
 )
 
 type Configuration struct {
-	urls       []string
-	method     string
-	postData   []byte
-	requests   int64
-	period     int64
-	keepAlive  bool
-	authHeader string
+	urls            []string
+	method          string
+	postData        []byte
+	requests        int64
+	period          int64
+	keepAlive       bool
+	uriSubstitution bool
+	authHeader      string
 
 	myClient fasthttp.Client
 }
@@ -89,6 +94,7 @@ func init() {
 	flag.IntVar(&writeTimeout, "tw", 5000, "Write timeout (in milliseconds)")
 	flag.IntVar(&readTimeout, "tr", 5000, "Read timeout (in milliseconds)")
 	flag.StringVar(&authHeader, "auth", "", "Authorization header")
+	flag.BoolVar(&uriSubstitution, "s", false, "Support <UUID> & <CID> substition in uri")
 }
 
 func printResults(results map[int]*Result, startTime time.Time) {
@@ -170,12 +176,13 @@ func NewConfiguration() *Configuration {
 	}
 
 	configuration := &Configuration{
-		urls:       make([]string, 0),
-		method:     "GET",
-		postData:   nil,
-		keepAlive:  keepAlive,
-		requests:   int64((1 << 63) - 1),
-		authHeader: authHeader}
+		urls:            make([]string, 0),
+		method:          "GET",
+		postData:        nil,
+		keepAlive:       keepAlive,
+		uriSubstitution: uriSubstitution,
+		requests:        int64((1 << 63) - 1),
+		authHeader:      authHeader}
 
 	if period != -1 {
 		configuration.period = period
@@ -250,13 +257,22 @@ func MyDialer() func(address string) (conn net.Conn, err error) {
 	}
 }
 
-func client(configuration *Configuration, result *Result, done *sync.WaitGroup) {
+func uriReplacer(s string, id string) string {
+	r := strings.NewReplacer("<UUID>", uuid.New(), "<CID>", id)
+	return r.Replace(s)
+}
+
+func client(configuration *Configuration, result *Result, id string, done *sync.WaitGroup) {
 	for result.requests < configuration.requests {
 		for _, tmpUrl := range configuration.urls {
 
 			req := fasthttp.AcquireRequest()
 
-			req.SetRequestURI(tmpUrl)
+			if configuration.uriSubstitution {
+				req.SetRequestURI(uriReplacer(tmpUrl, id))
+			} else {
+				req.SetRequestURI(tmpUrl)
+			}
 			req.Header.SetMethodBytes([]byte(configuration.method))
 
 			if configuration.keepAlive == true {
@@ -324,7 +340,7 @@ func main() {
 	for i := 0; i < clients; i++ {
 		result := &Result{}
 		results[i] = result
-		go client(configuration, result, &done)
+		go client(configuration, result, strconv.Itoa(i), &done)
 
 	}
 	fmt.Println("Waiting for results...")
