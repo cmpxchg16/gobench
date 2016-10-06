@@ -30,6 +30,7 @@ var (
 	writeTimeout     int
 	readTimeout      int
 	authHeader       string
+	userAgent        string
 )
 
 type Configuration struct {
@@ -40,6 +41,7 @@ type Configuration struct {
 	period     int64
 	keepAlive  bool
 	authHeader string
+	userAgent  string
 
 	myClient fasthttp.Client
 }
@@ -89,6 +91,7 @@ func init() {
 	flag.IntVar(&writeTimeout, "tw", 5000, "Write timeout (in milliseconds)")
 	flag.IntVar(&readTimeout, "tr", 5000, "Read timeout (in milliseconds)")
 	flag.StringVar(&authHeader, "auth", "", "Authorization header")
+	flag.StringVar(&userAgent, "agent", "", "User-Agent")
 }
 
 func printResults(results map[int]*Result, startTime time.Time) {
@@ -175,7 +178,8 @@ func NewConfiguration() *Configuration {
 		postData:   nil,
 		keepAlive:  keepAlive,
 		requests:   int64((1 << 63) - 1),
-		authHeader: authHeader}
+		authHeader: authHeader,
+		userAgent:  userAgent}
 
 	if period != -1 {
 		configuration.period = period
@@ -267,6 +271,10 @@ func client(configuration *Configuration, result *Result, done *sync.WaitGroup) 
 
 			if len(configuration.authHeader) > 0 {
 				req.Header.Set("Authorization", configuration.authHeader)
+			}
+
+			if len(configuration.userAgent) > 0 {
+				req.Header.Set("User-Agent", configuration.userAgent)
 			}
 
 			req.SetBody(configuration.postData)
