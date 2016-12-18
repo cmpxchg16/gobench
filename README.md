@@ -61,14 +61,20 @@ The funny part - I did some benchmark to the client tester tool and not to the s
 Usage
 ================
 
-1. download gobench
-    ```go get github.com/cmpxchg16/gobench```
-1. run some http server on port 80
-2. run gobench for HTTP GET
+1. install Go env follow: https://golang.org/dl/ 
+
+2. download gobench
+    
+    ```GOPATH=/tmp/ go get github.com/valyala/fasthttp```
+    ```GOPATH=/tmp/ go get github.com/cmpxchg16/gobench```
+
+3. run some http server on port 80
+
+4. run gobench for HTTP GET
 
     ```$>gobench -u http://localhost:80 -k=true -c 500 -t 10```
     
-3. run gobench for HTTP POST
+5. run gobench for HTTP POST
 
     ```$>gobench -u http://localhost:80 -k=true -c 500 -t 10 -d /tmp/post```
 
