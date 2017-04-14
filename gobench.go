@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"io"
@@ -30,16 +31,18 @@ var (
 	writeTimeout     int
 	readTimeout      int
 	authHeader       string
+	noCheckCert      bool
 )
 
 type Configuration struct {
-	urls       []string
-	method     string
-	postData   []byte
-	requests   int64
-	period     int64
-	keepAlive  bool
-	authHeader string
+	urls        []string
+	method      string
+	postData    []byte
+	requests    int64
+	period      int64
+	keepAlive   bool
+	authHeader  string
+	noCheckCert bool
 
 	myClient fasthttp.Client
 }
@@ -89,6 +92,7 @@ func init() {
 	flag.IntVar(&writeTimeout, "tw", 5000, "Write timeout (in milliseconds)")
 	flag.IntVar(&readTimeout, "tr", 5000, "Read timeout (in milliseconds)")
 	flag.StringVar(&authHeader, "auth", "", "Authorization header")
+	flag.BoolVar(&noCheckCert, "nc", false, "Do not validate server's certificate")
 }
 
 func printResults(results map[int]*Result, startTime time.Time) {
@@ -170,12 +174,13 @@ func NewConfiguration() *Configuration {
 	}
 
 	configuration := &Configuration{
-		urls:       make([]string, 0),
-		method:     "GET",
-		postData:   nil,
-		keepAlive:  keepAlive,
-		requests:   int64((1 << 63) - 1),
-		authHeader: authHeader}
+		urls:        make([]string, 0),
+		method:      "GET",
+		postData:    nil,
+		keepAlive:   keepAlive,
+		requests:    int64((1 << 63) - 1),
+		authHeader:  authHeader,
+		noCheckCert: noCheckCert}
 
 	if period != -1 {
 		configuration.period = period
@@ -231,6 +236,7 @@ func NewConfiguration() *Configuration {
 	configuration.myClient.ReadTimeout = time.Duration(readTimeout) * time.Millisecond
 	configuration.myClient.WriteTimeout = time.Duration(writeTimeout) * time.Millisecond
 	configuration.myClient.MaxConnsPerHost = clients
+	configuration.myClient.TLSConfig = &tls.Config{InsecureSkipVerify: noCheckCert}
 
 	configuration.myClient.Dial = MyDialer()
 
