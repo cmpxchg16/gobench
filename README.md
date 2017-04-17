@@ -14,9 +14,9 @@ If you already familiar with the model of Go for high performance I/O with gorou
 
 The funny part - I did some benchmark to the client tester tool and not to the server:
 
-##Siege vs GoBench:
+## Siege vs GoBench:
 
-###Siege:
+### Siege:
 
     $>siege -b -t10S -c500 http://localhost:80/
     
@@ -37,7 +37,7 @@ The funny part - I did some benchmark to the client tester tool and not to the s
     Longest transaction:	        1.02
     Shortest transaction:	        0.00
     
-###GoBench:
+### GoBench:
 
     $>gobench -k=true -u http://localhost:80 -c 500 -t 10
     Dispatching 500 clients
