@@ -188,6 +188,10 @@ func NewConfiguration() *Configuration {
 
 		go func() {
 			<-timeout
+			if runtime.GOOS == "windows" {
+				printResults(results, startTime)
+				os.Exit(0)
+			}
 			pid := os.Getpid()
 			proc, _ := os.FindProcess(pid)
 			err := proc.Signal(os.Interrupt)
@@ -294,12 +298,14 @@ func client(configuration *Configuration, result *Result, done *sync.WaitGroup) 
 	done.Done()
 }
 
+var results map[int]*Result = make(map[int]*Result)
+
+var startTime time.Time
+
 func main() {
 
-	startTime := time.Now()
+	startTime = time.Now()
 	var done sync.WaitGroup
-	results := make(map[int]*Result)
-
 	signalChannel := make(chan os.Signal, 2)
 	signal.Notify(signalChannel, os.Interrupt)
 	go func() {
@@ -328,6 +334,9 @@ func main() {
 
 	}
 	fmt.Println("Waiting for results...")
+
 	done.Wait()
+	fmt.Println("wait is done")
 	printResults(results, startTime)
 }
+
