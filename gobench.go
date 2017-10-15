@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"crypto/tls"
 	"github.com/valyala/fasthttp"
 )
 
@@ -30,6 +31,7 @@ var (
 	writeTimeout     int
 	readTimeout      int
 	authHeader       string
+	insecureSkipVerify bool
 )
 
 type Configuration struct {
@@ -84,6 +86,7 @@ func init() {
 	flag.StringVar(&url, "u", "", "URL")
 	flag.StringVar(&urlsFilePath, "f", "", "URL's file path (line seperated)")
 	flag.BoolVar(&keepAlive, "k", true, "Do HTTP keep-alive")
+	flag.BoolVar(&insecureSkipVerify, "s", false, "Skip cert check")
 	flag.StringVar(&postDataFilePath, "d", "", "HTTP POST data file path")
 	flag.Int64Var(&period, "t", -1, "Period of time (in seconds)")
 	flag.IntVar(&writeTimeout, "tw", 5000, "Write timeout (in milliseconds)")
@@ -193,6 +196,7 @@ func NewConfiguration() *Configuration {
 			err := proc.Signal(os.Interrupt)
 			if err != nil {
 				log.Println(err)
+				fmt.Println(err)
 				return
 			}
 		}()
@@ -231,6 +235,13 @@ func NewConfiguration() *Configuration {
 	configuration.myClient.ReadTimeout = time.Duration(readTimeout) * time.Millisecond
 	configuration.myClient.WriteTimeout = time.Duration(writeTimeout) * time.Millisecond
 	configuration.myClient.MaxConnsPerHost = clients
+
+	
+	// if flag set, then allow skip of cert check
+	if(insecureSkipVerify) {
+        	config := tls.Config{InsecureSkipVerify: true} 
+		configuration.myClient.TLSConfig = &config
+	}
 
 	configuration.myClient.Dial = MyDialer()
 
@@ -273,7 +284,9 @@ func client(configuration *Configuration, result *Result, done *sync.WaitGroup) 
 
 			resp := fasthttp.AcquireResponse()
 			err := configuration.myClient.Do(req, resp)
+			if(err!=nil) { fmt.Printf("%s\n",err) }
 			statusCode := resp.StatusCode()
+			//fmt.Printf("statusCode %d\n",fasthttp.StatusOK)
 			result.requests++
 			fasthttp.ReleaseRequest(req)
 			fasthttp.ReleaseResponse(resp)
