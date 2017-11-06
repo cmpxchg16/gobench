@@ -179,23 +179,6 @@ func NewConfiguration() *Configuration {
 
 	if period != -1 {
 		configuration.period = period
-
-		timeout := make(chan bool, 1)
-		go func() {
-			<-time.After(time.Duration(period) * time.Second)
-			timeout <- true
-		}()
-
-		go func() {
-			<-timeout
-			pid := os.Getpid()
-			proc, _ := os.FindProcess(pid)
-			err := proc.Signal(os.Interrupt)
-			if err != nil {
-				log.Println(err)
-				return
-			}
-		}()
 	}
 
 	if requests != -1 {
@@ -253,7 +236,6 @@ func MyDialer() func(address string) (conn net.Conn, err error) {
 func client(configuration *Configuration, result *Result, done *sync.WaitGroup) {
 	for result.requests < configuration.requests {
 		for _, tmpUrl := range configuration.urls {
-
 			req := fasthttp.AcquireRequest()
 
 			req.SetRequestURI(tmpUrl)
@@ -300,14 +282,6 @@ func main() {
 	var done sync.WaitGroup
 	results := make(map[int]*Result)
 
-	signalChannel := make(chan os.Signal, 2)
-	signal.Notify(signalChannel, os.Interrupt)
-	go func() {
-		_ = <-signalChannel
-		printResults(results, startTime)
-		os.Exit(0)
-	}()
-
 	flag.Parse()
 
 	configuration := NewConfiguration()
@@ -319,14 +293,30 @@ func main() {
 	}
 
 	fmt.Printf("Dispatching %d clients\n", clients)
-
 	done.Add(clients)
 	for i := 0; i < clients; i++ {
 		result := &Result{}
 		results[i] = result
 		go client(configuration, result, &done)
-
 	}
+
+	signalChannel := make(chan os.Signal, 2)
+	signal.Notify(signalChannel, os.Interrupt)
+	go func() {
+		timeout :=  make(<-chan time.Time, 0)
+
+		if configuration.period > 0 {
+			timeout = time.After(time.Duration(configuration.period)*time.Second)
+		}
+
+		select {
+			case <-signalChannel:
+			case <-timeout:
+		}
+		printResults(results, startTime)
+		os.Exit(0)
+	}()
+
 	fmt.Println("Waiting for results...")
 	done.Wait()
 	printResults(results, startTime)
