@@ -58,8 +58,8 @@ type MyConn struct {
 	net.Conn
 }
 
-func (this *MyConn) Read(b []byte) (n int, err error) {
-	len, err := this.Conn.Read(b)
+func (conn *MyConn) Read(b []byte) (n int, err error) {
+	len, err := conn.Conn.Read(b)
 
 	if err == nil {
 		atomic.AddInt64(&readThroughput, int64(len))
@@ -68,8 +68,8 @@ func (this *MyConn) Read(b []byte) (n int, err error) {
 	return len, err
 }
 
-func (this *MyConn) Write(b []byte) (n int, err error) {
-	len, err := this.Conn.Write(b)
+func (conn *MyConn) Write(b []byte) (n int, err error) {
+	len, err := conn.Conn.Write(b)
 
 	if err == nil {
 		atomic.AddInt64(&writeThroughput, int64(len))
@@ -206,7 +206,7 @@ func NewConfiguration() *Configuration {
 		fileLines, err := readLines(urlsFilePath)
 
 		if err != nil {
-			log.Fatalf("Error in ioutil.ReadFile for file: %s Error: ", urlsFilePath, err)
+			log.Fatalf("Error in ioutil.ReadFile for file: %s Error: %v", urlsFilePath, err)
 		}
 
 		configuration.urls = fileLines
@@ -222,7 +222,7 @@ func NewConfiguration() *Configuration {
 		data, err := ioutil.ReadFile(postDataFilePath)
 
 		if err != nil {
-			log.Fatalf("Error in ioutil.ReadFile for file path: %s Error: ", postDataFilePath, err)
+			log.Fatalf("Error in ioutil.ReadFile for file path: %s Error: %v", postDataFilePath, err)
 		}
 
 		configuration.postData = data
@@ -259,7 +259,7 @@ func client(configuration *Configuration, result *Result, done *sync.WaitGroup) 
 			req.SetRequestURI(tmpUrl)
 			req.Header.SetMethodBytes([]byte(configuration.method))
 
-			if configuration.keepAlive == true {
+			if configuration.keepAlive {
 				req.Header.Set("Connection", "keep-alive")
 			} else {
 				req.Header.Set("Connection", "close")
@@ -303,7 +303,7 @@ func main() {
 	signalChannel := make(chan os.Signal, 2)
 	signal.Notify(signalChannel, os.Interrupt)
 	go func() {
-		_ = <-signalChannel
+		<-signalChannel
 		printResults(results, startTime)
 		os.Exit(0)
 	}()
