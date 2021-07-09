@@ -181,23 +181,6 @@ func NewConfiguration() Configuration {
 
 	if period != -1 {
 		configuration.period = period
-
-		timeout := make(chan bool, 1)
-		go func() {
-			<-time.After(time.Duration(period) * time.Second)
-			timeout <- true
-		}()
-
-		go func() {
-			<-timeout
-			pid := os.Getpid()
-			proc, _ := os.FindProcess(pid)
-			err := proc.Signal(os.Interrupt)
-			if err != nil {
-				log.Println(err)
-				return
-			}
-		}()
 	}
 
 	if requests != -1 {
@@ -308,20 +291,33 @@ func main() {
 	var done sync.WaitGroup
 	results := make(map[int]*Result)
 
-	signalChannel := make(chan os.Signal, 2)
-	signal.Notify(signalChannel, os.Interrupt)
-	go func() {
-		<-signalChannel
-		printResults(results, startTime)
-		os.Exit(0)
-	}()
-
 	configuration := NewConfiguration()
-
 	goMaxProcs := os.Getenv("GOMAXPROCS")
 	if goMaxProcs == "" {
 		runtime.GOMAXPROCS(runtime.NumCPU())
 	}
+
+	// interupt and print results on ctr+c
+	Interrupted := make(chan os.Signal, 1)
+	signal.Notify(Interrupted, os.Interrupt)
+
+	// register timeout
+	timeout := make(chan bool, 1)
+	if configuration.period != -1 {
+		go func() {
+			time.Sleep(time.Duration(configuration.period) * time.Second)
+			timeout <- true
+		}()
+	}
+
+	go func() {
+		select {
+		case <-Interrupted:
+		case <-timeout:
+		}
+		printResults(results, startTime)
+		os.Exit(0)
+	}()
 
 	fmt.Printf("Dispatching %d clients\n", clients)
 
