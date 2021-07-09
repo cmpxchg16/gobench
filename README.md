@@ -1,103 +1,40 @@
-Introduction
-================
+<!-- markdownlint-disable MD041-->
+[![Go Report Card](https://goreportcard.com/badge/github.com/EricNeid/go-bench?style=flat-square)](https://goreportcard.com/report/github.com/EricNeid/go-getdockerimage)
+![Go](https://github.com/EricNeid/go-sleep/workflows/Go/badge.svg)
+[![Gitpod Ready-to-Code](https://img.shields.io/badge/Gitpod-Ready--to--Code-blue?logo=gitpod)](https://gitpod.io/#https://github.com/EricNeid/go-bench)
 
-I wrote that code because: (the obvious reason::I love to write code in Go)
+# About
 
-We are working so hard to optimize our servers - why shouldn't we do it for our clients testers?!
+This tool is a simple benchmark tool to test the performace and throughput of your server.
 
-I noticed that the existing tools for benchmarking/load HTTP/HTTPS servers has some issues:
-* ab (ApacheBenchmark) - maximum concurrency is 20k (can be eliminate by opening multiple ab processes)
-* Siege are work in a model of native thread per request, meaning that you cannot simulated thousands/ten of thousands clients concurrently even if you tweak the RLIMIT of stack usage per native thread - still that kill the client machine and cause it to be very load and not an efficient client/s.
-What we really want is minimum resources usage and get the maximum throughput/load!
+Forked from <https://github.com/cmpxchg16/gobench>, so be sure to check
+their project out as well.
 
-If you already familiar with the model of Go for high performance I/O with goroutines, we can achieve that mission easily.
+## Usage
 
-The funny part - I did some benchmark to the client tester tool and not to the server:
+1. Get go from <https://golang.org/dl/>
 
-##Siege vs GoBench:
+2. Download gobench
 
-###Siege:
+```bash
+go get github.com/EricNeid/go-bench
+```
 
-    $>siege -b -t10S -c500 http://localhost:80/
-    
-    ** SIEGE 2.70
-    ** Preparing 500 concurrent users for battle.
-    The server is now under siege...
-    Lifting the server siege...      done.
-    Transactions:		       74247 hits
-    Availability:		      100.00 %
-    Elapsed time:		        9.62 secs
-    Data transferred:	       96.58 MB
-    Response time:		        0.06 secs
-    Transaction rate:	     7717.98 trans/sec
-    Throughput:		       10.04 MB/sec
-    Concurrency:		      490.19
-    Successful transactions:       74247
-    Failed transactions:	           0
-    Longest transaction:	        1.02
-    Shortest transaction:	        0.00
-    
-###GoBench:
+Running HTTP GET:
 
-    $>gobench -k=true -u http://localhost:80 -c 500 -t 10
-    Dispatching 500 clients
-    Waiting for results...
+```bash
+gobench -u http://localhost:80 -k=true -c 500 -t 10
+```
 
-    Requests:                           343669 hits
-    Successful requests:                343669 hits
-    Network failed:                          0 hits
-    Bad requests failed (!2xx):              0 hits
-    Successfull requests rate:           34366 hits/sec
-    Read throughput:                  54700061 bytes/sec
-    Write throughput:                  4128684 bytes/sec
-    Test time:                              10 sec
+Running HTTP Post:
 
+```bash
+gobench -u http://localhost:80 -k=true -c 500 -t 10 -d ./data.json
+gobench -u http://localhost:80 -k=true -c 500 -t 10 -b '{\"name\":\"Timmy\"}'
+```
 
-* requests hits and requests rate are 5X better on the same time (10 seconds) and the same number of clients (500)!
-* I tried the same with 2000 clients on Siege with proper system configuration, and Siege was crashed
-* I tried gobench with the maximum number of clients that we can use (65535 ports) - it's rocked!
-* Yet I didn't put the results of ab because I still need to investigate the results
+Getting help:
 
-Usage
-================
-
-1. install Go env follow: https://golang.org/dl/ 
-
-2. download gobench
-    
-    ```
-    GOPATH=/tmp/ go get github.com/valyala/fasthttp
-    GOPATH=/tmp/ go get github.com/cmpxchg16/gobench
-    ```
-
-3. run some http server on port 80
-
-4. run gobench for HTTP GET
-
-    ```$>gobench -u http://localhost:80 -k=true -c 500 -t 10```
-    
-5. run gobench for HTTP POST
-
-    ```$>gobench -u http://localhost:80 -k=true -c 500 -t 10 -d /tmp/post```
-
-
-Notes
-================
-
-2. Because it's a test tool, in HTTPS the ceritificate verification is insecure
-3. use Go >= 1.5 (fasthttp require it)
-
-Help
-================
-
-```gobench --help```
-
-License
-================
-
-Licensed under the New BSD License.
-
-Author
-================
-
-Uri Shamay (shamayuri@gmail.com)
+```bash
+gobench --help
+```
