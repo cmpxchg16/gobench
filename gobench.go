@@ -27,6 +27,7 @@ var (
 	urlsFilePath     string
 	keepAlive        bool
 	postDataFilePath string
+	postBody         string
 	writeTimeout     int
 	readTimeout      int
 	authHeader       string
@@ -85,6 +86,7 @@ func init() {
 	flag.StringVar(&urlsFilePath, "f", "", "URL's file path (line seperated)")
 	flag.BoolVar(&keepAlive, "k", true, "Do HTTP keep-alive")
 	flag.StringVar(&postDataFilePath, "d", "", "HTTP POST data file path")
+	flag.StringVar(&postBody, "b", "", "HTTP POST body")
 	flag.Int64Var(&period, "t", -1, "Period of time (in seconds)")
 	flag.IntVar(&writeTimeout, "tw", 5000, "Write timeout (in milliseconds)")
 	flag.IntVar(&readTimeout, "tr", 5000, "Read timeout (in milliseconds)")
@@ -226,6 +228,11 @@ func NewConfiguration() *Configuration {
 		}
 
 		configuration.postData = data
+	}
+
+	if postBody != "" {
+		configuration.method = "POST"
+		configuration.postData = []byte(postBody)
 	}
 
 	configuration.myClient.ReadTimeout = time.Duration(readTimeout) * time.Millisecond
