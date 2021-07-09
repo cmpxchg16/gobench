@@ -152,8 +152,8 @@ func readLines(path string) (lines []string, err error) {
 	return
 }
 
-func NewConfiguration() *Configuration {
-
+func NewConfiguration() Configuration {
+	flag.Parse()
 	if urlsFilePath == "" && url == "" {
 		flag.Usage()
 		os.Exit(1)
@@ -171,7 +171,7 @@ func NewConfiguration() *Configuration {
 		os.Exit(1)
 	}
 
-	configuration := &Configuration{
+	configuration := Configuration{
 		urls:       make([]string, 0),
 		method:     "GET",
 		postData:   nil,
@@ -257,7 +257,7 @@ func MyDialer() func(address string) (conn net.Conn, err error) {
 	}
 }
 
-func client(configuration *Configuration, result *Result, done *sync.WaitGroup) {
+func client(configuration Configuration, result *Result, done *sync.WaitGroup) {
 	for result.requests < configuration.requests {
 		for _, tmpUrl := range configuration.urls {
 
@@ -316,12 +316,9 @@ func main() {
 		os.Exit(0)
 	}()
 
-	flag.Parse()
-
 	configuration := NewConfiguration()
 
 	goMaxProcs := os.Getenv("GOMAXPROCS")
-
 	if goMaxProcs == "" {
 		runtime.GOMAXPROCS(runtime.NumCPU())
 	}
