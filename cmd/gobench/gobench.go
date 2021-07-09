@@ -28,19 +28,21 @@ var (
 	keepAlive        bool
 	postDataFilePath string
 	postBody         string
+	contentType      string
 	writeTimeout     int
 	readTimeout      int
 	authHeader       string
 )
 
 type Configuration struct {
-	urls       []string
-	method     string
-	postData   []byte
-	requests   int64
-	period     int64
-	keepAlive  bool
-	authHeader string
+	urls        []string
+	method      string
+	postData    []byte
+	contentType string
+	requests    int64
+	period      int64
+	keepAlive   bool
+	authHeader  string
 
 	myClient fasthttp.Client
 }
@@ -87,6 +89,7 @@ func init() {
 	flag.BoolVar(&keepAlive, "k", true, "Do HTTP keep-alive")
 	flag.StringVar(&postDataFilePath, "d", "", "HTTP POST data file path")
 	flag.StringVar(&postBody, "b", "", "HTTP POST body")
+	flag.StringVar(&contentType, "content-type", "", "Content type of post body")
 	flag.Int64Var(&period, "t", -1, "Period of time (in seconds)")
 	flag.IntVar(&writeTimeout, "tw", 5000, "Write timeout (in milliseconds)")
 	flag.IntVar(&readTimeout, "tr", 5000, "Read timeout (in milliseconds)")
@@ -218,6 +221,10 @@ func NewConfiguration() Configuration {
 		configuration.postData = []byte(postBody)
 	}
 
+	if contentType != "" {
+		configuration.contentType = contentType
+	}
+
 	configuration.myClient.ReadTimeout = time.Duration(readTimeout) * time.Millisecond
 	configuration.myClient.WriteTimeout = time.Duration(writeTimeout) * time.Millisecond
 	configuration.myClient.MaxConnsPerHost = clients
@@ -257,6 +264,10 @@ func client(configuration Configuration, result *Result, done *sync.WaitGroup) {
 
 			if len(configuration.authHeader) > 0 {
 				req.Header.Set("Authorization", configuration.authHeader)
+			}
+
+			if len(configuration.contentType) > 0 {
+				req.Header.SetContentType(configuration.contentType)
 			}
 
 			req.SetBody(configuration.postData)
