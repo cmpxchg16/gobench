@@ -283,7 +283,8 @@ func client(configuration *Configuration, result *Result, done *sync.WaitGroup) 
 				continue
 			}
 
-			if statusCode == fasthttp.StatusOK {
+			// check for any success status code
+			if statusCode >= 200 && statusCode <= 226 {
 				result.success++
 			} else {
 				result.badFailed++
