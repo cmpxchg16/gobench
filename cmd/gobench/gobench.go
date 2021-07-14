@@ -34,7 +34,7 @@ var (
 	authHeader       string
 )
 
-type Configuration struct {
+type configuration struct {
 	urls        []string
 	method      string
 	postData    []byte
@@ -54,13 +54,14 @@ type Result struct {
 	badFailed     int64
 }
 
-var readThroughput int64
-var writeThroughput int64
-
 type MyConn struct {
 	net.Conn
 }
 
+var readThroughput int64
+var writeThroughput int64
+
+// override fasthttp Read function
 func (conn *MyConn) Read(b []byte) (n int, err error) {
 	len, err := conn.Conn.Read(b)
 
@@ -71,6 +72,7 @@ func (conn *MyConn) Read(b []byte) (n int, err error) {
 	return len, err
 }
 
+// override fasthttp Write function
 func (conn *MyConn) Write(b []byte) (n int, err error) {
 	len, err := conn.Conn.Write(b)
 
@@ -127,7 +129,6 @@ func printResults(results map[int]*Result, startTime time.Time) {
 }
 
 func readLines(path string) (lines []string, err error) {
-
 	var file *os.File
 	var part []byte
 	var prefix bool
@@ -155,7 +156,7 @@ func readLines(path string) (lines []string, err error) {
 	return
 }
 
-func NewConfiguration() Configuration {
+func newConfiguration() configuration {
 	flag.Parse()
 	if urlsFilePath == "" && url == "" {
 		flag.Usage()
@@ -174,7 +175,7 @@ func NewConfiguration() Configuration {
 		os.Exit(1)
 	}
 
-	configuration := Configuration{
+	configuration := configuration{
 		urls:       make([]string, 0),
 		method:     "GET",
 		postData:   nil,
@@ -247,7 +248,7 @@ func MyDialer() func(address string) (conn net.Conn, err error) {
 	}
 }
 
-func client(configuration Configuration, result *Result, done *sync.WaitGroup) {
+func client(configuration configuration, result *Result, done *sync.WaitGroup) {
 	for result.requests < configuration.requests {
 		for _, tmpUrl := range configuration.urls {
 
@@ -297,12 +298,11 @@ func client(configuration Configuration, result *Result, done *sync.WaitGroup) {
 }
 
 func main() {
-
 	startTime := time.Now()
 	var done sync.WaitGroup
 	results := make(map[int]*Result)
 
-	configuration := NewConfiguration()
+	configuration := newConfiguration()
 	goMaxProcs := os.Getenv("GOMAXPROCS")
 	if goMaxProcs == "" {
 		runtime.GOMAXPROCS(runtime.NumCPU())
