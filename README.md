@@ -1,6 +1,7 @@
 <!-- markdownlint-disable MD041-->
 [![Go Report Card](https://goreportcard.com/badge/github.com/EricNeid/go-bench?style=flat-square)](https://goreportcard.com/report/github.com/EricNeid/go-getdockerimage)
 ![Go](https://github.com/EricNeid/go-sleep/workflows/Go/badge.svg)
+[![Release](https://img.shields.io/github/release/EricNeid/go-bench.svg?style=flat-square)](https://github.com/EricNeid/go-bench/releases/latest)
 [![Gitpod Ready-to-Code](https://img.shields.io/badge/Gitpod-Ready--to--Code-blue?logo=gitpod)](https://gitpod.io/#https://github.com/EricNeid/go-bench)
 
 # About
