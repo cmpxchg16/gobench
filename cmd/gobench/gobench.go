@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -20,8 +19,8 @@ import (
 )
 
 var (
-	requests         int64
-	period           int64
+	requestCount     int64
+	requestsDuration int64
 	clients          int
 	url              string
 	urlsFilePath     string
@@ -35,14 +34,14 @@ var (
 )
 
 type configuration struct {
-	urls        []string
-	method      string
-	postData    []byte
-	contentType string
-	requests    int64
-	period      int64
-	keepAlive   bool
-	authHeader  string
+	urls             []string
+	method           string
+	postData         []byte
+	contentType      string
+	requestCount     int64
+	requestsDuration int64
+	keepAlive        bool
+	authHeader       string
 
 	myClient fasthttp.Client
 }
@@ -84,7 +83,7 @@ func (conn *MyConn) Write(b []byte) (n int, err error) {
 }
 
 func init() {
-	flag.Int64Var(&requests, "r", -1, "Number of requests per client")
+	flag.Int64Var(&requestCount, "r", -1, "Number of requests per client")
 	flag.IntVar(&clients, "c", 100, "Number of concurrent clients")
 	flag.StringVar(&url, "u", "", "URL")
 	flag.StringVar(&urlsFilePath, "f", "", "URL's file path (line seperated)")
@@ -92,7 +91,7 @@ func init() {
 	flag.StringVar(&postDataFilePath, "d", "", "HTTP POST data file path: gobench -u http://localhost -t 10 -d ./data.json")
 	flag.StringVar(&postBody, "b", "", "HTTP POST body: gobench -u http://localhost -t 10 -b '{\"name\":\"max\"}'")
 	flag.StringVar(&contentType, "content-type", "", "Content type of post body")
-	flag.Int64Var(&period, "t", -1, "Period of time (in seconds)")
+	flag.Int64Var(&requestsDuration, "t", -1, "Period of time (in seconds)")
 	flag.IntVar(&writeTimeout, "tw", 5000, "Write timeout (in milliseconds)")
 	flag.IntVar(&readTimeout, "tr", 5000, "Read timeout (in milliseconds)")
 	flag.StringVar(&authHeader, "auth", "", "Authorization header: gobench -u http://localhost -t 10 -auth 'Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=='")
@@ -163,33 +162,26 @@ func newConfiguration() configuration {
 		os.Exit(1)
 	}
 
-	if requests == -1 && period == -1 {
+	if requestCount == -1 && requestsDuration == -1 {
 		fmt.Println("Requests or period must be provided")
 		flag.Usage()
 		os.Exit(1)
 	}
 
-	if requests != -1 && period != -1 {
+	if requestCount != -1 && requestsDuration != -1 {
 		fmt.Println("Only one should be provided: [requests|period]")
 		flag.Usage()
 		os.Exit(1)
 	}
 
 	configuration := configuration{
-		urls:       make([]string, 0),
-		method:     "GET",
-		postData:   nil,
-		keepAlive:  keepAlive,
-		requests:   int64((1 << 63) - 1),
-		authHeader: authHeader,
-	}
-
-	if period != -1 {
-		configuration.period = period
-	}
-
-	if requests != -1 {
-		configuration.requests = requests
+		urls:             make([]string, 0),
+		method:           "GET",
+		postData:         nil,
+		keepAlive:        keepAlive,
+		authHeader:       authHeader,
+		requestCount:     requestCount,
+		requestsDuration: requestsDuration,
 	}
 
 	if urlsFilePath != "" {
@@ -208,13 +200,10 @@ func newConfiguration() configuration {
 
 	if postDataFilePath != "" {
 		configuration.method = "POST"
-
-		data, err := ioutil.ReadFile(postDataFilePath)
-
+		data, err := os.ReadFile(postDataFilePath)
 		if err != nil {
 			log.Fatalf("Error in ioutil.ReadFile for file path: %s Error: %v", postDataFilePath, err)
 		}
-
 		configuration.postData = data
 	}
 
@@ -250,7 +239,8 @@ func MyDialer() func(address string) (conn net.Conn, err error) {
 }
 
 func client(configuration configuration, result *Result, done *sync.WaitGroup) {
-	for result.requests < configuration.requests {
+	// either perform requests until request count is reached or wait for timeout to kick in
+	for result.requests < configuration.requestCount || configuration.requestsDuration != -1 {
 		for _, tmpUrl := range configuration.urls {
 
 			req := fasthttp.AcquireRequest()
@@ -315,9 +305,9 @@ func main() {
 
 	// register timeout
 	timeout := make(chan bool, 1)
-	if configuration.period != -1 {
+	if configuration.requestsDuration != -1 {
 		go func() {
-			time.Sleep(time.Duration(configuration.period) * time.Second)
+			time.Sleep(time.Duration(configuration.requestsDuration) * time.Second)
 			timeout <- true
 		}()
 	}
