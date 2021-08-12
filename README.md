@@ -18,7 +18,7 @@ their project out as well.
 2. Download gobench
 
 ```bash
-go get github.com/EricNeid/go-bench/cmd/gobench
+go get -u github.com/EricNeid/go-bench/cmd/gobench
 ```
 
 Running HTTP GET:
