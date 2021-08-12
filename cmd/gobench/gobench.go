@@ -88,14 +88,14 @@ func init() {
 	flag.IntVar(&clients, "c", 100, "Number of concurrent clients")
 	flag.StringVar(&url, "u", "", "URL")
 	flag.StringVar(&urlsFilePath, "f", "", "URL's file path (line seperated)")
-	flag.BoolVar(&keepAlive, "k", true, "Do HTTP keep-alive")
-	flag.StringVar(&postDataFilePath, "d", "", "HTTP POST data file path")
-	flag.StringVar(&postBody, "b", "", "HTTP POST body")
+	flag.BoolVar(&keepAlive, "k", true, "Do HTTP keep-alive ")
+	flag.StringVar(&postDataFilePath, "d", "", "HTTP POST data file path: gobench -u http://localhost -t 10 -d ./data.json")
+	flag.StringVar(&postBody, "b", "", "HTTP POST body: gobench -u http://localhost -t 10 -b '{\"name\":\"max\"}'")
 	flag.StringVar(&contentType, "content-type", "", "Content type of post body")
 	flag.Int64Var(&period, "t", -1, "Period of time (in seconds)")
 	flag.IntVar(&writeTimeout, "tw", 5000, "Write timeout (in milliseconds)")
 	flag.IntVar(&readTimeout, "tr", 5000, "Read timeout (in milliseconds)")
-	flag.StringVar(&authHeader, "auth", "", "Authorization header")
+	flag.StringVar(&authHeader, "auth", "", "Authorization header: gobench -u http://localhost -t 10 -auth 'Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=='")
 }
 
 func printResults(results map[int]*Result, startTime time.Time) {
@@ -181,7 +181,8 @@ func newConfiguration() configuration {
 		postData:   nil,
 		keepAlive:  keepAlive,
 		requests:   int64((1 << 63) - 1),
-		authHeader: authHeader}
+		authHeader: authHeader,
+	}
 
 	if period != -1 {
 		configuration.period = period
