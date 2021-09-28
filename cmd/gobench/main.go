@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,27 +22,34 @@ var (
 	requestCount     int64
 	requestsDuration int64
 	clients          int
-	url              string
-	urlsFilePath     string
 	keepAlive        bool
+
+	url          string
+	urlsFilePath string
+
 	postDataFilePath string
 	postBody         string
-	contentType      string
-	writeTimeout     int
-	readTimeout      int
-	authHeader       string
+
+	writeTimeout int
+	readTimeout  int
+
+	contentType       string
+	authHeader        string
+	additionalHeaders string
 )
 
 // configuration from cli arguments
 type runConfiguration struct {
-	urls             []string
-	method           string
-	postData         []byte
-	contentType      string
+	urls     []string
+	method   string
+	postData []byte
+
 	requestCount     int64
 	requestsDuration int64
 	keepAlive        bool
-	authHeader       string
+
+	contentType      string
+	additioanlHeadrs map[string]string
 
 	myClient fasthttp.Client
 }
@@ -49,16 +57,28 @@ type runConfiguration struct {
 func init() {
 	flag.Int64Var(&requestCount, "r", -1, "Number of requests per client")
 	flag.IntVar(&clients, "c", 100, "Number of concurrent clients")
+
 	flag.StringVar(&url, "u", "", "URL")
 	flag.StringVar(&urlsFilePath, "f", "", "URL's file path (line seperated)")
+
 	flag.BoolVar(&keepAlive, "k", true, "Do HTTP keep-alive ")
+
 	flag.StringVar(&postDataFilePath, "d", "", "HTTP POST data file path: gobench -u http://localhost -t 10 -d ./data.json")
 	flag.StringVar(&postBody, "b", "", "HTTP POST body: gobench -u http://localhost -t 10 -b '{\"name\":\"max\"}'")
 	flag.StringVar(&contentType, "content-type", "", "Content type of post body")
+
 	flag.Int64Var(&requestsDuration, "t", -1, "Period of time (in seconds)")
 	flag.IntVar(&writeTimeout, "tw", 5000, "Write timeout (in milliseconds)")
 	flag.IntVar(&readTimeout, "tr", 5000, "Read timeout (in milliseconds)")
+
 	flag.StringVar(&authHeader, "auth", "", "Authorization header: gobench -u http://localhost -t 10 -auth 'Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=='")
+	flag.StringVar(
+		&additionalHeaders,
+		"additional-headers",
+		additionalHeaders,
+		"additional header fields: gobench -u http://localhost -t 10 -additional-headers key1=value1,key2=value2",
+	)
+
 	flag.Parse()
 }
 
@@ -127,55 +147,65 @@ func newRunConfiguration() runConfiguration {
 		os.Exit(1)
 	}
 
-	configuration := runConfiguration{
+	conf := runConfiguration{
 		urls:             make([]string, 0),
 		method:           "GET",
 		postData:         nil,
 		keepAlive:        keepAlive,
-		authHeader:       authHeader,
+		additioanlHeadrs: make(map[string]string),
 		requestCount:     requestCount,
 		requestsDuration: requestsDuration,
 	}
 
+	// read urls
 	if urlsFilePath != "" {
 		fileLines, err := readLines(urlsFilePath)
-
 		if err != nil {
 			log.Fatalf("Error in ioutil.ReadFile for file: %s Error: %v", urlsFilePath, err)
 		}
-
-		configuration.urls = fileLines
+		conf.urls = fileLines
 	}
-
 	if url != "" {
-		configuration.urls = append(configuration.urls, url)
+		conf.urls = append(conf.urls, url)
 	}
 
+	// read optional post body
 	if postDataFilePath != "" {
-		configuration.method = "POST"
+		conf.method = "POST"
 		data, err := os.ReadFile(postDataFilePath)
 		if err != nil {
-			log.Fatalf("Error in ioutil.ReadFile for file path: %s Error: %v", postDataFilePath, err)
+			log.Fatalf("Error in ioutil.ReadFile for file path: %s Error: %s", postDataFilePath, err)
 		}
-		configuration.postData = data
+		conf.postData = data
 	}
-
 	if postBody != "" {
-		configuration.method = "POST"
-		configuration.postData = []byte(postBody)
+		conf.method = "POST"
+		conf.postData = []byte(postBody)
 	}
 
+	// headers
 	if contentType != "" {
-		configuration.contentType = contentType
+		conf.contentType = contentType
+	}
+	if authHeader != "" {
+		conf.additioanlHeadrs["Authorization"] = authHeader
+	}
+	headers := strings.Split(additionalHeaders, ",")
+	for _, header := range headers {
+		keyValue := strings.Split(header, "=")
+		if len(keyValue) != 2 {
+			log.Fatalf("Invalid configuration for additional headers detected")
+		}
+		conf.additioanlHeadrs[keyValue[0]] = keyValue[1]
 	}
 
-	configuration.myClient.ReadTimeout = time.Duration(readTimeout) * time.Millisecond
-	configuration.myClient.WriteTimeout = time.Duration(writeTimeout) * time.Millisecond
-	configuration.myClient.MaxConnsPerHost = clients
+	// create dialer
+	conf.myClient.ReadTimeout = time.Duration(readTimeout) * time.Millisecond
+	conf.myClient.WriteTimeout = time.Duration(writeTimeout) * time.Millisecond
+	conf.myClient.MaxConnsPerHost = clients
+	conf.myClient.Dial = newMyDialFunction()
 
-	configuration.myClient.Dial = newMyDialFunction()
-
-	return configuration
+	return conf
 }
 
 func readLines(path string) (lines []string, err error) {

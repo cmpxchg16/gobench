@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 ### Added
+* Setting for additional headers
 * Changelog.md
 
 ## 0.2.0 - 2021-08-12

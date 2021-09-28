@@ -73,12 +73,12 @@ func startClient(configuration runConfiguration, result *Result, done *sync.Wait
 				req.Header.Set("Connection", "close")
 			}
 
-			if len(configuration.authHeader) > 0 {
-				req.Header.Set("Authorization", configuration.authHeader)
+			if configuration.contentType != "" {
+				req.Header.SetContentType(configuration.contentType)
 			}
 
-			if len(configuration.contentType) > 0 {
-				req.Header.SetContentType(configuration.contentType)
+			for k, v := range configuration.additioanlHeadrs {
+				req.Header.Set(k, v)
 			}
 
 			req.SetBody(configuration.postData)
