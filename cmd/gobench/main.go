@@ -74,9 +74,9 @@ func init() {
 	flag.StringVar(&authHeader, "auth", "", "Authorization header: gobench -u http://localhost -t 10 -auth 'Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=='")
 	flag.StringVar(
 		&additionalHeaders,
-		"additional-headers",
+		"headers",
 		additionalHeaders,
-		"additional header fields: gobench -u http://localhost -t 10 -additional-headers key1=value1,key2=value2",
+		"additional header fields: gobench -u http://localhost -t 10 -headers key1=value1,key2=value2",
 	)
 
 	flag.Parse()
