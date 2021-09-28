@@ -177,8 +177,7 @@ func newRunConfiguration() runConfiguration {
 			log.Fatalf("Error in ioutil.ReadFile for file path: %s Error: %s", postDataFilePath, err)
 		}
 		conf.postData = data
-	}
-	if postBody != "" {
+	} else if postBody != "" {
 		conf.method = "POST"
 		conf.postData = []byte(postBody)
 	}
@@ -193,10 +192,9 @@ func newRunConfiguration() runConfiguration {
 	headers := strings.Split(additionalHeaders, ",")
 	for _, header := range headers {
 		keyValue := strings.Split(header, "=")
-		if len(keyValue) != 2 {
-			log.Fatalf("Invalid configuration for additional headers detected")
+		if len(keyValue) == 2 {
+			conf.additioanlHeadrs[keyValue[0]] = keyValue[1]
 		}
-		conf.additioanlHeadrs[keyValue[0]] = keyValue[1]
 	}
 
 	// create dialer
