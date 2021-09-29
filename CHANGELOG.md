@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 ### Added
+* display version when printing usage
 * Setting for additional headers
 * Changelog.md
 

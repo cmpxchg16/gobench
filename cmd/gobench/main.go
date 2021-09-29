@@ -17,6 +17,8 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
+const version = "0.3.0"
+
 // cli arguments
 var (
 	requestCount     int64
@@ -55,6 +57,13 @@ type runConfiguration struct {
 }
 
 func init() {
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
+		fmt.Printf("Version: %s\n", version)
+		fmt.Printf("Command line options:\n")
+		flag.PrintDefaults()
+	}
+
 	flag.Int64Var(&requestCount, "r", -1, "Number of requests per client")
 	flag.IntVar(&clients, "c", 100, "Number of concurrent clients")
 
