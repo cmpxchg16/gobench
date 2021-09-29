@@ -1,3 +1,7 @@
+<!--
+SPDX-FileCopyrightText: 2013 go-bench AUTHORS
+SPDX-License-Identifier: CC-BY-4.0
+-->
 <!-- markdownlint-disable MD041-->
 [![Go Report Card](https://goreportcard.com/badge/github.com/EricNeid/go-bench?style=flat-square)](https://goreportcard.com/report/github.com/EricNeid/go-getdockerimage)
 ![Go](https://github.com/EricNeid/go-sleep/workflows/Go/badge.svg)

@@ -1,3 +1,7 @@
+<!--
+SPDX-FileCopyrightText: 2013 go-bench AUTHORS
+SPDX-License-Identifier: CC-BY-4.0
+-->
 <!-- markdownlint-disable MD022 MD032 MD024-->
 # Changelog
 

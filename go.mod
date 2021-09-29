@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2013 go-bench AUTHORS
+// SPDX-License-Identifier: BSD-3-Clause
 module github.com/EricNeid/go-bench
 
 go 1.16
