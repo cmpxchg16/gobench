@@ -4,8 +4,8 @@ Copyright © 2021 Eric Neidhardt
 
 This work is licensed under multiple licenses:
 
-- The source code and the accompanying material are licensed under [3-Clause BSD License](LICENSES/BSD-3-Clause.txt).
-- The documentation filese are licensed under [CC-BY-4.0](LICENSES/CC-BY-4.0.txt).
+- The source code and the accompanying material are licensed under [MIT](LICENSES/MIT.txt).
+- The documentation files are licensed under [CC-BY-4.0](LICENSES/CC-BY-4.0.txt).
 - Insignificant files are licensed under [CC0-1.0](LICENSES/CC0-1.0.txt).
 
 Please see the individual files for more accurate information.
